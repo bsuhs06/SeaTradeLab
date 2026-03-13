@@ -1,0 +1,12 @@
+# AWS infrastructure (private deployment config, secrets, state)
+infra/
+
+# Environment files
+.env
+*.env
+
+# Backups (large binary files)
+backups/
+
+# OS
+.DS_Store
