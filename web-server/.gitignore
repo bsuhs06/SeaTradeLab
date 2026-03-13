@@ -1,0 +1,32 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/web-server
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store

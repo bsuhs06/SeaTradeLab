@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeaTradeLab</title>
+    <!-- Legacy static page — replaced by Vue frontend in /frontend -->
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e0e0e0}
+        a{color:#7cb4ff;text-decoration:none}a:hover{text-decoration:underline}
+        .header{background:linear-gradient(135deg,#0d1117 0%,#1a2332 100%);padding:48px 24px;text-align:center;border-bottom:1px solid rgba(124,180,255,0.15)}
+        .header h1{font-size:52px;color:#7cb4ff;letter-spacing:10px;font-weight:800}
+        .header .sub{font-size:13px;color:#888;letter-spacing:2px;margin-top:6px;text-transform:uppercase}
+        .header .tag{font-size:17px;color:#ccc;margin-top:18px}
+        .nav{display:flex;justify-content:center;gap:12px;margin-top:28px;flex-wrap:wrap}
+        .nav a{padding:10px 28px;border-radius:6px;font-size:14px;font-weight:600;text-decoration:none}
+        .nav .pri{background:#1a73e8;color:#fff}.nav .pri:hover{background:#1557b0;text-decoration:none}
+        .nav .sec{background:rgba(255,255,255,0.07);color:#ccc;border:1px solid rgba(255,255,255,0.12)}.nav .sec:hover{background:rgba(255,255,255,0.12);text-decoration:none}
+        .container{max-width:1200px;margin:0 auto;padding:24px}
+        .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
+        .sc{background:rgba(20,24,33,0.85);padding:18px;border-radius:8px;border:1px solid rgba(255,255,255,0.07)}
+        .sc .v{font-size:28px;font-weight:700;color:#7cb4ff}.sc .l{font-size:12px;color:#888;margin-top:4px}
+        .sc.alert .v{color:#ff6b6b}
+        .sc.warn .v{color:#ffa726}
+        .search-box{position:relative;margin-bottom:24px}
+        .search-box input{width:100%;padding:14px 18px 14px 44px;font-size:15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;outline:none}
+        .search-box input:focus{border-color:#7cb4ff}
+        .search-box input::placeholder{color:#555}
+        .search-box svg{position:absolute;left:14px;top:14px;fill:#555}
+        .sr{max-height:320px;overflow-y:auto;background:rgba(20,24,33,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:0 0 8px 8px;display:none;position:absolute;left:0;right:0;z-index:10}
+        .sr-item{padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+        .sr-item:hover{background:rgba(255,255,255,0.05)}
+        .sr-item .nm{font-weight:600}.sr-item .mt{font-size:11px;color:#888}
+        .sr-item .ru{color:#ff6b6b}
+        .two-col{display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:28px}
+        @media(max-width:860px){.two-col{grid-template-columns:1fr}}
+        .panel{background:rgba(20,24,33,0.85);border-radius:8px;border:1px solid rgba(255,255,255,0.07);overflow:hidden;margin-bottom:20px}
+        .ph{padding:13px 18px;font-size:14px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center}
+        .ph span:last-child{font-size:11px;color:#888;font-weight:400}
+        .tab-row{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.07)}
+        .tab-btn{padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;border:none;color:#888;border-bottom:2px solid transparent}
+        .tab-btn.active{color:#7cb4ff;border-bottom-color:#7cb4ff}
+        .tab-btn:hover{color:#ccc}
+        table{width:100%;border-collapse:collapse}
+        th{text-align:left;padding:9px 14px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.08)}
+        td{padding:9px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.04)}
+        tr:hover{background:rgba(255,255,255,0.02)}
+        .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+        .badge.high{background:rgba(255,59,48,0.2);color:#ff6b6b}
+        .badge.medium{background:rgba(255,159,0,0.2);color:#ffa726}
+        .badge.low{background:rgba(76,175,80,0.2);color:#66bb6a}
+        .badge.foreign{background:rgba(255,159,0,0.2);color:#ffa726}
+        .badge.russian{background:rgba(255,59,48,0.15);color:#ff6b6b}
+        .badge.inport{background:rgba(76,175,80,0.2);color:#66bb6a}
+        .link{color:#7cb4ff;cursor:pointer}
+        .russian{color:#ff6b6b}
+        .foreign{color:#ffa726}
+        .empty{text-align:center;padding:32px;color:#555;font-size:13px}
+        .analytics-panel{margin-bottom:28px}
+        .analytics-panel .controls{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:16px}
+        .analytics-panel .param-group{display:flex;flex-direction:column;gap:4px}
+        .analytics-panel .param-group label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+        .analytics-panel .param-group input,.analytics-panel .param-group select{padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:#fff;font-size:13px;outline:none}
+        .analytics-panel .param-group input:focus,.analytics-panel .param-group select:focus{border-color:#7cb4ff}
+        .analytics-panel .btn-row{display:flex;gap:8px;padding:0 16px 16px;flex-wrap:wrap}
+        .analytics-panel .run-btn{padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;border:none;cursor:pointer;color:#fff}
+        .analytics-panel .run-btn.sts{background:#e67e22}.analytics-panel .run-btn.sts:hover{background:#d35400}
+        .analytics-panel .run-btn.gaps{background:#9b59b6}.analytics-panel .run-btn.gaps:hover{background:#8e44ad}
+        .analytics-panel .run-btn.ports{background:#2ecc71}.analytics-panel .run-btn.ports:hover{background:#27ae60}
+        .analytics-panel .run-btn.rports{background:#e74c3c}.analytics-panel .run-btn.rports:hover{background:#c0392b}
+        .analytics-panel .run-btn.detect{background:#3498db}.analytics-panel .run-btn.detect:hover{background:#2980b9}
+        .analytics-panel .run-btn.all{background:#1a73e8}.analytics-panel .run-btn.all:hover{background:#1557b0}
+        .analytics-panel .run-btn:disabled{opacity:.5;cursor:not-allowed}
+        .analytics-output{margin:0 16px 16px;padding:12px;background:rgba(0,0,0,0.3);border-radius:6px;font-family:'SF Mono',SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;color:#aaa;max-height:300px;overflow-y:auto;white-space:pre-wrap;display:none}
+        .analytics-status{padding:0 16px 8px;font-size:12px}
+        .analytics-status .running{color:#ffa726}.analytics-status .completed{color:#66bb6a}.analytics-status .failed{color:#ff6b6b}
+        .collector-panel{margin-bottom:28px}
+        .collector-panel .status-row{display:flex;align-items:center;gap:14px;padding:16px}
+        .collector-panel .dot{width:12px;height:12px;border-radius:50%;display:inline-block;flex-shrink:0}
+        .collector-panel .dot.on{background:#66bb6a;box-shadow:0 0 8px rgba(102,187,106,0.5)}
+        .collector-panel .dot.off{background:#ff6b6b;box-shadow:0 0 8px rgba(255,107,107,0.5)}
+        .collector-panel .dot.ext{background:#ffa726;box-shadow:0 0 8px rgba(255,167,38,0.5)}
+        .collector-panel .status-text{font-size:14px;font-weight:600;flex:1}
+        .collector-panel .status-detail{font-size:12px;color:#888}
+        .collector-panel .ctl-btns{display:flex;gap:8px;padding:0 16px 16px}
+        .collector-panel .ctl-btn{padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;border:none;cursor:pointer;color:#fff}
+        .collector-panel .ctl-btn.start{background:#2ecc71}.collector-panel .ctl-btn.start:hover{background:#27ae60}
+        .collector-panel .ctl-btn.stop{background:#e74c3c}.collector-panel .ctl-btn.stop:hover{background:#c0392b}
+        .collector-panel .ctl-btn:disabled{opacity:.5;cursor:not-allowed}
+        .collector-log{margin:0 16px 16px;padding:12px;background:rgba(0,0,0,0.3);border-radius:6px;font-family:'SF Mono',SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;color:#aaa;max-height:200px;overflow-y:auto;white-space:pre-wrap;display:none}
+        .port-panel{margin-bottom:28px}
+        .port-panel .port-controls{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap;align-items:flex-end}
+        .port-panel .port-controls input,.port-panel .port-controls select{padding:7px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:#fff;font-size:13px;outline:none}
+        .port-panel .port-controls input:focus,.port-panel .port-controls select:focus{border-color:#7cb4ff}
+        .port-panel .port-controls label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:2px}
+        .port-panel .port-controls .fg{display:flex;flex-direction:column}
+        .port-panel .add-btn{padding:7px 16px;border-radius:4px;font-size:13px;font-weight:600;border:none;cursor:pointer;color:#fff;background:#2ecc71;align-self:flex-end}
+        .port-panel .add-btn:hover{background:#27ae60}
+        .port-panel .rm-btn{padding:7px 16px;border-radius:4px;font-size:13px;font-weight:600;border:none;cursor:pointer;color:#fff;background:#e74c3c;align-self:flex-end}
+        .port-panel .rm-btn:hover{background:#c0392b}
+        .port-table{max-height:400px;overflow-y:auto}
+        .port-filter{padding:8px 16px;display:flex;gap:8px;flex-wrap:wrap}
+        .port-filter input{padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:#fff;font-size:13px;outline:none;width:200px}
+        .port-filter select{padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:#fff;font-size:13px;outline:none}
+        .port-src-custom{color:#7cb4ff;font-weight:600}
+        .port-src-builtin{color:#888}
+        .del-override{cursor:pointer;color:#ff6b6b;font-size:12px;border:none;background:transparent;padding:2px 8px}
+        .del-override:hover{color:#ff3b3b;text-decoration:underline}
+        .port-type-tag{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;text-transform:uppercase}
+        .port-type-tag.oil{background:rgba(255,159,0,0.2);color:#ffa726}
+        .port-type-tag.lng{background:rgba(156,39,176,0.2);color:#ba68c8}
+        .port-type-tag.commercial{background:rgba(33,150,243,0.2);color:#42a5f5}
+        .port-type-tag.cargo{background:rgba(121,85,72,0.2);color:#a1887f}
+        .port-type-tag.ferry{background:rgba(0,150,136,0.2);color:#4db6ac}
+        .port-type-tag.naval{background:rgba(255,59,48,0.15);color:#ff6b6b}
+        .port-type-tag.multi{background:rgba(158,158,158,0.2);color:#bdbdbd}
+        .port-type-tag.fishing{background:rgba(76,175,80,0.2);color:#66bb6a}
+        .faq{margin-top:32px}.faq h2{font-size:22px;margin-bottom:14px;color:#fff}
+        .fi{background:rgba(20,24,33,0.85);border-radius:8px;border:1px solid rgba(255,255,255,0.07);margin-bottom:8px;overflow:hidden}
+        .fq{padding:14px 18px;cursor:pointer;font-weight:600;display:flex;justify-content:space-between;align-items:center;font-size:14px}
+        .fq:hover{background:rgba(255,255,255,0.03)}
+        .fq .t{color:#7cb4ff;font-size:18px;transition:transform .2s}
+        .fa{padding:0 18px;font-size:13px;line-height:1.8;color:#bbb;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease}
+        .fa.open{max-height:600px;padding:0 18px 16px}
+        .fa code{background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:3px;font-size:12px;color:#7cb4ff}
+        .fa ul{margin:8px 0 8px 20px}.fa li{margin:4px 0}
+        .footer{text-align:center;padding:28px;font-size:12px;color:#444;border-top:1px solid rgba(255,255,255,0.06);margin-top:48px}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SeaTradeLab</h1>
+        <div class="sub">Baltic AIS monitoring and shadow fleet detection</div>
+        <div class="tag">Real-time maritime surveillance and ship-to-ship transfer detection</div>
+        <div class="nav">
+            <a href="/map.html" class="pri">Open Live Map</a>
+            <a href="#events" class="sec">STS Events</a>
+            <a href="#port-visitors" class="sec">Port Visitors</a>
+            <a href="#analytics" class="sec">Run Analytics</a>
+            <a href="#collector" class="sec">Collector</a>
+            <a href="#port-mgmt" class="sec">Ports</a>
+            <a href="#faq" class="sec">How It Works</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-row">
+            <div class="sc"><div class="v" id="s-total">--</div><div class="l">Total Vessels Tracked</div></div>
+            <div class="sc alert"><div class="v" id="s-russian">--</div><div class="l">Russian-Flagged Vessels</div></div>
+            <div class="sc"><div class="v" id="s-positions">--</div><div class="l">Position Reports</div></div>
+            <div class="sc alert"><div class="v" id="s-sts">--</div><div class="l">STS Alerts (7d)</div></div>
+            <div class="sc"><div class="v" id="s-dark">--</div><div class="l">Dark Vessels (6h+)</div></div>
+            <div class="sc warn"><div class="v" id="s-port-visits">--</div><div class="l">Foreign Vessels in RUS Ports</div></div>
+        </div>
+
+        <div class="search-box">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="vessel-search" placeholder="Search vessels by name, MMSI, IMO, or call sign..." autocomplete="off">
+            <div class="sr" id="search-results"></div>
+        </div>
+
+        <!-- Russian Port Visitors -->
+        <div class="panel" id="port-visitors">
+            <div class="ph"><span>Vessels Visiting Russian Ports</span><span id="pv-period">Last 30 days</span></div>
+            <div class="tab-row">
+                <button class="tab-btn active" onclick="filterPortVisits('foreign',this)">Non-Russian Only</button>
+                <button class="tab-btn" onclick="filterPortVisits('all',this)">All Vessels</button>
+            </div>
+            <div style="overflow-x:auto;max-height:500px;overflow-y:auto">
+            <table>
+                <thead><tr><th>Vessel</th><th>Flag</th><th>Type</th><th>Port</th><th>Arrived</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+                <tbody id="pv-body"><tr><td colspan="8" class="empty">Loading...</td></tr></tbody>
+            </table>
+            </div>
+        </div>
+
+        <div class="two-col" id="events">
+            <div class="panel">
+                <div class="ph"><span>Detected Ship-to-Ship Transfers</span><span>Last 7 days</span></div>
+                <div style="overflow-x:auto">
+                <table>
+                    <thead><tr><th>Time</th><th>Vessel A</th><th>Vessel B</th><th>Duration</th><th>Min Dist</th><th>Confidence</th><th></th></tr></thead>
+                    <tbody id="sts-body"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+                </table>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="ph"><span>Dark Vessels</span><span>AIS off 6h+</span></div>
+                <div style="max-height:400px;overflow-y:auto">
+                <table>
+                    <thead><tr><th>Vessel</th><th>Last Seen</th><th>Gap</th></tr></thead>
+                    <tbody id="dark-body"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Runner -->
+        <div class="panel analytics-panel" id="analytics">
+            <div class="ph"><span>Run Analytics</span><span>Configure and execute detection scripts</span></div>
+            <div class="controls">
+                <div class="param-group">
+                    <label>Lookback Hours</label>
+                    <input type="number" id="a-hours" value="24" min="1" max="720" step="1">
+                </div>
+                <div class="param-group">
+                    <label>STS Distance (m)</label>
+                    <input type="number" id="a-distance" value="500" min="100" max="5000" step="100">
+                </div>
+                <div class="param-group">
+                    <label>Max Speed (kn)</label>
+                    <input type="number" id="a-speed" value="3" min="0.5" max="10" step="0.5">
+                </div>
+                <div class="param-group">
+                    <label>Min Duration (min)</label>
+                    <input type="number" id="a-min-duration" value="15" min="5" max="120" step="5">
+                </div>
+                <div class="param-group">
+                    <label>AIS Gap Hours</label>
+                    <input type="number" id="a-gap-hours" value="2" min="0.5" max="48" step="0.5">
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="run-btn sts" onclick="runAnalytics('sts')">STS Detection</button>
+                <button class="run-btn gaps" onclick="runAnalytics('gaps')">AIS Gaps</button>
+                <button class="run-btn ports" onclick="runAnalytics('ports')">Port Tracking</button>
+                <button class="run-btn rports" onclick="runAnalytics('russian-ports')">Russian Ports</button>
+                <button class="run-btn detect" onclick="runAnalytics('detect')">Fleet Summary</button>
+                <button class="run-btn all" onclick="runAnalytics('all')">Run All</button>
+            </div>
+            <div class="analytics-status" id="a-status"></div>
+            <div class="analytics-output" id="a-output"></div>
+        </div>
+
+        <!-- AIS Collector Control -->
+        <div class="panel collector-panel" id="collector">
+            <div class="ph"><span>AIS Collector</span><span>Process control for maritime data collection</span></div>
+            <div class="status-row">
+                <span class="dot off" id="c-dot"></span>
+                <span class="status-text" id="c-status">Checking...</span>
+                <span class="status-detail" id="c-detail"></span>
+            </div>
+            <div class="ctl-btns">
+                <button class="ctl-btn start" id="c-start" onclick="collectorStart()" disabled>Start Collector</button>
+                <button class="ctl-btn stop" id="c-stop" onclick="collectorStop()" disabled>Stop Collector</button>
+            </div>
+            <div class="collector-log" id="c-log"></div>
+        </div>
+
+        <!-- Port Management -->
+        <div class="panel port-panel" id="port-mgmt">
+            <div class="ph"><span>Port Definitions</span><span id="port-count">Loading...</span></div>
+            <div class="port-filter">
+                <input type="text" id="port-search" placeholder="Filter ports..." oninput="filterPorts()">
+                <select id="port-country-filter" onchange="filterPorts()">
+                    <option value="">All Countries</option>
+                </select>
+                <select id="port-type-filter" onchange="filterPorts()">
+                    <option value="">All Types</option>
+                    <option value="oil">Oil</option>
+                    <option value="lng">LNG</option>
+                    <option value="commercial">Commercial</option>
+                    <option value="cargo">Cargo</option>
+                    <option value="ferry">Ferry</option>
+                    <option value="naval">Naval</option>
+                </select>
+            </div>
+            <div class="port-table">
+                <table>
+                    <thead><tr><th>Port</th><th>Country</th><th>Type</th><th>Lat</th><th>Lon</th><th>Radius</th><th>Source</th><th></th></tr></thead>
+                    <tbody id="port-body"><tr><td colspan="8" class="empty">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <div class="port-controls">
+                <div class="fg"><label>Port Name</label><input type="text" id="p-name" placeholder="Port name" style="width:140px"></div>
+                <div class="fg"><label>Latitude</label><input type="number" id="p-lat" step="0.001" placeholder="60.000" style="width:90px"></div>
+                <div class="fg"><label>Longitude</label><input type="number" id="p-lon" step="0.001" placeholder="25.000" style="width:90px"></div>
+                <div class="fg"><label>Radius (km)</label><input type="number" id="p-radius" value="4.0" step="0.5" min="1" max="20" style="width:70px"></div>
+                <div class="fg"><label>Country</label><input type="text" id="p-country" placeholder="Finland" style="width:100px"></div>
+                <div class="fg"><label>Type</label>
+                    <select id="p-type" style="width:110px">
+                        <option value="commercial">Commercial</option>
+                        <option value="oil">Oil</option>
+                        <option value="lng">LNG</option>
+                        <option value="cargo">Cargo</option>
+                        <option value="ferry">Ferry</option>
+                        <option value="naval">Naval</option>
+                        <option value="fishing">Fishing</option>
+                    </select>
+                </div>
+                <button class="add-btn" onclick="addPort()">Add Port</button>
+            </div>
+        </div>
+
+        <div class="faq" id="faq">
+            <h2>How it works</h2>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>What is AIS and why does it matter?</span><span class="t">+</span></div>
+            <div class="fa">AIS (Automatic Identification System) is a mandatory tracking system for commercial vessels. Ships broadcast their identity, position, speed, course, and destination via VHF radio. The collector pulls this data from the Finnish Digitraffic Maritime API, which covers the Baltic Sea, Gulf of Finland, and surrounding waters, polling every 10 minutes to build a picture of vessel movements.<br><br>Under international law (IMO SOLAS), all ships over 300 gross tons on international voyages must transmit AIS. Turning off AIS is a red flag that often indicates sanctions evasion, illicit transfers, or smuggling.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>How does Ship-to-Ship (STS) transfer detection work?</span><span class="t">+</span></div>
+            <div class="fa">The STS detector scans position data to find pairs of vessels that:<ul><li>Come within close proximity (default: 500 meters, configurable)</li><li>Both slow down significantly (speed under 3 knots, configurable)</li><li>Remain close for a sustained period (default: 15+ minutes)</li></ul>The algorithm uses a KD-tree spatial index for efficient proximity searching, then computes precise geodesic distances for candidate pairs. Events are grouped across consecutive time windows and assigned confidence scores:<ul><li><span class="badge high">HIGH</span> Duration 60+ minutes — very likely a transfer</li><li><span class="badge medium">MEDIUM</span> Duration 15-60 minutes — probable transfer</li><li><span class="badge low">LOW</span> Duration under 15 minutes — possible brief encounter</li></ul>All parameters (distance threshold, speed threshold, minimum duration) are configurable via the analytics CLI.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>What are "dark vessels" and AIS gaps?</span><span class="t">+</span></div>
+            <div class="fa">A "dark vessel" is one that has stopped transmitting AIS data. The gap detector tracks this by comparing each vessel's last known position timestamp against the current time. Vessels are flagged as dark when their AIS gap exceeds a configurable threshold (default: 6 hours).<br><br>It also detects <strong>historical AIS gaps</strong> — periods within a vessel's track where no position reports were received for an extended time. Two vessels going dark in proximity is a strong indicator of a covert ship-to-ship transfer.<br><br>Important caveat: the Finnish Digitraffic API has regional coverage. A vessel sailing out of the Baltic may appear to "go dark" simply because it left the coverage area.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>How does Russian port visit detection work?</span><span class="t">+</span></div>
+            <div class="fa">The port visit detector monitors vessel positions near key Russian ports in its coverage area:<ul><li><strong>Primorsk</strong> — Major crude oil terminal (Gulf of Finland)</li><li><strong>Ust-Luga</strong> — Oil, gas, and coal terminal (Gulf of Finland)</li><li><strong>Vysotsk</strong> — Oil terminal near Vyborg</li><li><strong>St. Petersburg</strong> — Russia's largest Baltic commercial port</li><li><strong>Kaliningrad</strong> — Russian exclave port</li></ul>The system identifies each vessel's flag state from its MMSI prefix (Maritime ID digits assigned by ITU). Non-Russian vessels visiting these ports are particularly interesting for sanctions monitoring, as they may be loading sanctioned Russian oil or cargo.<br><br>A visit is recorded when a vessel remains within the port boundary (typically 4-8 km radius) for at least 30 minutes. Duration, vessel type, and flag state are all tracked.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>What is a "ghost fleet" / dark fleet?</span><span class="t">+</span></div>
+            <div class="fa">The "dark fleet" or "shadow fleet" refers to a growing network of aging tankers used to circumvent international sanctions on Russian oil exports. These vessels often:<ul><li>Operate under flags of convenience (Cameroon, Gabon, Palau, etc.)</li><li>Turn off AIS transponders during transfers</li><li>Conduct ship-to-ship transfers in open water to obscure oil origins</li><li>Lack proper insurance (P&I club coverage)</li><li>Use shell companies to hide ownership</li></ul>This tracker focuses on detecting the behavioral signatures of these operations: proximity events, AIS gaps, port visits, and unusual movement patterns near known transfer zones.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>How does the time slider work?</span><span class="t">+</span></div>
+            <div class="fa">The time slider on the map page lets you view historical vessel positions at any point in time. When you drag the slider, it queries the database for each vessel's most recent position at or before the selected time (within a 1-hour window). This effectively replays vessel movements hour by hour.<br><br>Use the play button to animate the map, watching vessels move across the Baltic. The slider range spans from the earliest collected data to the current time.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>What configurable parameters are available?</span><span class="t">+</span></div>
+            <div class="fa">The detection algorithms accept several tunable parameters:<br><br><code>--distance</code> STS proximity threshold in meters (default: 500m)<br><code>--speed</code> Maximum SOG to count as "loitering" in knots (default: 3.0 kn)<br><code>--min-duration</code> Minimum encounter duration in minutes (default: 15 min)<br><code>--gap-hours</code> Minimum AIS gap to flag in hours (default: 2.0h)<br><code>--hours</code> How far back to scan in hours (default: 24h)<br><code>--russian-ports</code> Scan for vessels visiting Russian ports<br><br>On the map page, the AIS staleness filter lets you dynamically show/hide vessels based on how recently they reported.</div></div>
+
+            <div class="fi"><div class="fq" onclick="toggleFaq(this)"><span>Data source and coverage area</span><span class="t">+</span></div>
+            <div class="fa">Data comes from the <strong>Finnish Digitraffic Maritime API</strong>, a free, public API provided by the Finnish Transport Infrastructure Agency. Coverage includes:<ul><li>Gulf of Finland</li><li>Baltic Sea (northern and central)</li><li>Gulf of Bothnia</li><li>Approaches to St. Petersburg, Helsinki, Tallinn, Stockholm</li></ul>Key Russian ports in coverage: Primorsk, Ust-Luga, Vysotsk, St. Petersburg. Other monitored ports: Helsinki, Tallinn/Muuga, Hamina-Kotka, Porvoo/Kilpilahti, Turku, Gdansk.<br><br>Data is polled every 10 minutes. Total positions in database grow by approximately 2.5 million per day.</div></div>
+        </div>
+    </div>
+
+    <div class="footer">SeaTradeLab | Data: Finnish Digitraffic Maritime API</div>
+
+    <script>
+    function toggleFaq(el) {
+        var a = el.nextElementSibling;
+        var t = el.querySelector('.t');
+        if (a.classList.contains('open')) {
+            a.classList.remove('open');
+            t.textContent = '+';
+            t.style.transform = '';
+        } else {
+            a.classList.add('open');
+            t.textContent = '-';
+            t.style.transform = 'rotate(180deg)';
+        }
+    }
+
+    function fmt(n) { return n != null ? Number(n).toLocaleString() : '--'; }
+    function fmtTime(ts) {
+        var d = new Date(ts);
+        return d.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'});
+    }
+    function fmtAgo(ts) {
+        var h = (Date.now() - new Date(ts).getTime()) / 3600000;
+        if (h < 1) return Math.round(h * 60) + 'm ago';
+        if (h < 24) return Math.round(h) + 'h ago';
+        return Math.round(h / 24) + 'd ago';
+    }
+    function fmtDur(h) {
+        if (h == null) return '--';
+        if (h < 1) return Math.round(h * 60) + 'm';
+        if (h < 24) return h.toFixed(1) + 'h';
+        return (h / 24).toFixed(1) + 'd';
+    }
+
+    // Load stats
+    function loadStats() {
+        fetch('/api/stats').then(function(r){return r.json()}).then(function(s){
+            document.getElementById('s-total').textContent = fmt(s.total_vessels);
+            document.getElementById('s-russian').textContent = fmt(s.russian_vessels);
+            document.getElementById('s-positions').textContent = fmt(s.total_positions);
+        }).catch(function(){});
+    }
+
+    // Load STS events
+    function loadSTSEvents() {
+        fetch('/api/sts-events?hours=168').then(function(r){return r.json()}).then(function(data){
+            document.getElementById('s-sts').textContent = (data.events && data.events.length) || '0';
+            var body = document.getElementById('sts-body');
+            if (!data.events || data.events.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="empty">No STS events detected yet. Run analytics: <code>cd analytics && python -m src.run --detect</code></td></tr>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < data.events.length; i++) {
+                var e = data.events[i];
+                var isRusA = String(e.mmsi_a).indexOf('273') === 0;
+                var isRusB = String(e.mmsi_b).indexOf('273') === 0;
+                html += '<tr>';
+                html += '<td>' + fmtTime(e.start_time) + '</td>';
+                html += '<td class="' + (isRusA ? 'russian' : '') + '">' + (e.name_a || e.mmsi_a) + '</td>';
+                html += '<td class="' + (isRusB ? 'russian' : '') + '">' + (e.name_b || e.mmsi_b) + '</td>';
+                html += '<td>' + e.duration_minutes + ' min</td>';
+                html += '<td>' + (e.min_distance_m != null ? Math.round(e.min_distance_m) + 'm' : '--') + '</td>';
+                html += '<td><span class="badge ' + e.confidence + '">' + e.confidence.toUpperCase() + '</span></td>';
+                html += '<td>';
+                if (e.avg_lat && e.avg_lon) {
+                    html += '<a class="link" href="/map.html#goto=' + e.avg_lat + ',' + e.avg_lon + ',14">View</a>';
+                }
+                html += '</td></tr>';
+            }
+            body.innerHTML = html;
+        }).catch(function(){
+            document.getElementById('sts-body').innerHTML = '<tr><td colspan="7" class="empty">Could not load STS events</td></tr>';
+        });
+    }
+
+    // Load dark vessels
+    function loadDarkVessels() {
+        fetch('/api/dark-vessels?min_hours=6').then(function(r){return r.json()}).then(function(data){
+            document.getElementById('s-dark').textContent = data.count || '0';
+            var body = document.getElementById('dark-body');
+            if (!data.features || data.features.length === 0) {
+                body.innerHTML = '<tr><td colspan="3" class="empty">No dark vessels currently</td></tr>';
+                return;
+            }
+            var html = '';
+            var max = Math.min(data.features.length, 50);
+            for (var i = 0; i < max; i++) {
+                var p = data.features[i].properties;
+                var isR = p.is_russian;
+                html += '<tr>';
+                html += '<td class="' + (isR ? 'russian' : '') + '">' + (p.name || p.mmsi) + (isR ? ' [RUS]' : '') + '</td>';
+                html += '<td>' + fmtAgo(p.timestamp) + '</td>';
+                html += '<td>' + (p.gap_hours != null ? p.gap_hours + 'h' : '--') + '</td>';
+                html += '</tr>';
+            }
+            body.innerHTML = html;
+        }).catch(function(){
+            document.getElementById('dark-body').innerHTML = '<tr><td colspan="3" class="empty">Could not load dark vessels</td></tr>';
+        });
+    }
+
+    // Refresh all dashboard data in-place
+    function refreshAllData() {
+        loadStats();
+        loadSTSEvents();
+        loadDarkVessels();
+        loadPortVisits();
+    }
+
+    // Initial data load
+    loadStats();
+    loadSTSEvents();
+    loadDarkVessels();
+
+    // ===== Russian Port Visits =====
+    var pvMode = 'foreign'; // or 'all'
+    var pvCache = {};
+
+    function filterPortVisits(mode, btn) {
+        pvMode = mode;
+        document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+        loadPortVisits();
+    }
+
+    function loadPortVisits() {
+        var url = '/api/port-visits?hours=720&limit=200';
+        if (pvMode === 'foreign') url += '&non_russian=true';
+        fetch(url).then(function(r){return r.json()}).then(function(data){
+            var body = document.getElementById('pv-body');
+            if (pvMode === 'foreign') {
+                document.getElementById('s-port-visits').textContent = data.count || '0';
+            }
+            if (!data.visits || data.visits.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" class="empty">No Russian port visits detected yet. Run: <code>cd analytics && python -m src.run --russian-ports</code></td></tr>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < data.visits.length; i++) {
+                var v = data.visits[i];
+                var flagClass = v.is_russian ? 'russian' : 'foreign';
+                html += '<tr>';
+                html += '<td class="' + flagClass + '">' + (v.vessel_name || v.mmsi) + '</td>';
+                html += '<td><span class="badge ' + (v.is_russian ? 'russian' : 'foreign') + '">' + (v.flag_country || 'Unknown') + '</span></td>';
+                html += '<td>' + (v.vessel_type || '--') + '</td>';
+                html += '<td>' + v.port_name + '</td>';
+                html += '<td>' + fmtTime(v.arrival_time) + '</td>';
+                html += '<td>' + fmtDur(v.duration_hours) + '</td>';
+                html += '<td>';
+                if (v.still_in_port) html += '<span class="badge inport">IN PORT</span>';
+                html += '</td>';
+                html += '<td>';
+                if (v.port_lat && v.port_lon) {
+                    html += '<a class="link" href="/map.html#goto=' + v.port_lat + ',' + v.port_lon + ',13">Map</a>';
+                }
+                html += '</td></tr>';
+            }
+            body.innerHTML = html;
+        }).catch(function(){
+            document.getElementById('pv-body').innerHTML = '<tr><td colspan="8" class="empty">Could not load port visits</td></tr>';
+        });
+    }
+
+    loadPortVisits();
+
+    // Vessel search
+    var searchInput = document.getElementById('vessel-search');
+    var searchResults = document.getElementById('search-results');
+    var searchTimer = null;
+
+    searchInput.addEventListener('input', function() {
+        var q = searchInput.value.trim();
+        if (q.length < 2) { searchResults.style.display = 'none'; return; }
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(function() {
+            fetch('/api/search?q=' + encodeURIComponent(q) + '&limit=15')
+                .then(function(r){return r.json()})
+                .then(function(data) {
+                    if (!data.features || data.features.length === 0) {
+                        searchResults.innerHTML = '<div class="sr-item"><span class="mt">No results</span></div>';
+                        searchResults.style.display = 'block';
+                        return;
+                    }
+                    var html = '';
+                    for (var i = 0; i < data.features.length; i++) {
+                        var p = data.features[i].properties;
+                        var c = data.features[i].geometry.coordinates;
+                        var isR = p.is_russian;
+                        html += '<div class="sr-item" onclick="goToVessel(' + c[1] + ',' + c[0] + ',' + p.mmsi + ')">';
+                        html += '<div><span class="nm ' + (isR ? 'ru' : '') + '">' + (p.name || 'Unknown') + '</span>';
+                        if (isR) html += ' <span class="badge high">RUS</span>';
+                        html += '<br><span class="mt">MMSI: ' + p.mmsi;
+                        if (p.vessel_type) html += ' | ' + p.vessel_type;
+                        html += '</span></div>';
+                        html += '<span class="mt">' + fmtAgo(p.timestamp) + '</span>';
+                        html += '</div>';
+                    }
+                    searchResults.innerHTML = html;
+                    searchResults.style.display = 'block';
+                }).catch(function(){});
+        }, 300);
+    });
+
+    searchInput.addEventListener('blur', function() {
+        setTimeout(function(){ searchResults.style.display = 'none'; }, 200);
+    });
+
+    function goToVessel(lat, lng, mmsi) {
+        window.location.href = '/map.html#search=' + mmsi + '&goto=' + lat + ',' + lng + ',14';
+    }
+
+    // ===== Analytics Runner =====
+    var analyticsPolling = null;
+
+    function runAnalytics(task) {
+        var params = {
+            task: task,
+            hours: parseInt(document.getElementById('a-hours').value) || 24,
+            distance: parseInt(document.getElementById('a-distance').value) || 500,
+            speed: parseInt(document.getElementById('a-speed').value) || 3,
+            min_duration: parseInt(document.getElementById('a-min-duration').value) || 15,
+            gap_hours: parseInt(document.getElementById('a-gap-hours').value) || 2
+        };
+        var btns = document.querySelectorAll('.run-btn');
+        btns.forEach(function(b){ b.disabled = true; });
+        var statusEl = document.getElementById('a-status');
+        var outputEl = document.getElementById('a-output');
+        statusEl.innerHTML = '<span class="running">Starting ' + task + ' analysis...</span>';
+        outputEl.style.display = 'block';
+        outputEl.textContent = 'Waiting for output...';
+
+        fetch('/api/run-analytics', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(params)
+        }).then(function(r){ return r.json(); }).then(function(data) {
+            if (data.error) {
+                statusEl.innerHTML = '<span class="failed">' + data.error + '</span>';
+                btns.forEach(function(b){ b.disabled = false; });
+                return;
+            }
+            statusEl.innerHTML = '<span class="running">Running: ' + (data.run && data.run.args || task) + '</span>';
+            // Poll for status
+            if (analyticsPolling) clearInterval(analyticsPolling);
+            analyticsPolling = setInterval(pollAnalytics, 2000);
+        }).catch(function(e) {
+            statusEl.innerHTML = '<span class="failed">Error: ' + e.message + '</span>';
+            btns.forEach(function(b){ b.disabled = false; });
+        });
+    }
+
+    function pollAnalytics() {
+        fetch('/api/analytics-status').then(function(r){return r.json()}).then(function(data) {
+            var statusEl = document.getElementById('a-status');
+            var outputEl = document.getElementById('a-output');
+            if (data.status === 'running') {
+                statusEl.innerHTML = '<span class="running">Running: ' + (data.args || '') + '...</span>';
+                if (data.output) outputEl.textContent = data.output;
+            } else {
+                if (analyticsPolling) { clearInterval(analyticsPolling); analyticsPolling = null; }
+                var cls = data.status === 'completed' ? 'completed' : 'failed';
+                statusEl.innerHTML = '<span class="' + cls + '">' + (data.status === 'completed' ? 'Completed' : 'Failed') + ' (started ' + (data.started_at || '') + ')</span>';
+                if (data.output) outputEl.textContent = data.output;
+                document.querySelectorAll('.run-btn').forEach(function(b){ b.disabled = false; });
+                // Reload data tables if completed
+                if (data.status === 'completed') {
+                    refreshAllData();
+                }
+            }
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }).catch(function(){});
+    }
+
+    // ===== AIS Collector Control =====
+    var collectorPolling = null;
+
+    function pollCollectorStatus() {
+        fetch('/api/collector-status').then(function(r){return r.json()}).then(function(data) {
+            var dot = document.getElementById('c-dot');
+            var statusText = document.getElementById('c-status');
+            var detail = document.getElementById('c-detail');
+            var startBtn = document.getElementById('c-start');
+            var stopBtn = document.getElementById('c-stop');
+            var logEl = document.getElementById('c-log');
+
+            var running = data.managed_running;
+            var extPids = data.external_pids || [];
+            var hasExternal = extPids.length > 0;
+
+            if (running) {
+                dot.className = 'dot on';
+                statusText.textContent = 'Running';
+                detail.textContent = 'PID: ' + data.managed_pid;
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else if (hasExternal) {
+                dot.className = 'dot ext';
+                statusText.textContent = 'Running (external)';
+                detail.textContent = extPids.length + ' external process' + (extPids.length > 1 ? 'es' : '') + ' (PIDs: ' + extPids.join(', ') + ')';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                dot.className = 'dot off';
+                statusText.textContent = 'Stopped';
+                detail.textContent = '';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+
+            if (data.last_collected) {
+                var ago = fmtAgo(data.last_collected);
+                detail.textContent += (detail.textContent ? ' | ' : '') + 'Last poll: ' + ago;
+            }
+
+            if (!data.binary_found) {
+                statusText.textContent = 'Binary not found';
+                startBtn.disabled = true;
+            }
+
+            if (data.log) {
+                logEl.style.display = 'block';
+                logEl.textContent = data.log;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+        }).catch(function(){
+            document.getElementById('c-status').textContent = 'Error checking status';
+        });
+    }
+
+    function collectorStart() {
+        var startBtn = document.getElementById('c-start');
+        var stopBtn = document.getElementById('c-stop');
+        startBtn.disabled = true;
+        document.getElementById('c-status').textContent = 'Starting...';
+
+        fetch('/api/collector-start', { method: 'POST' })
+            .then(function(r){ return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    document.getElementById('c-status').textContent = 'Error: ' + data.error;
+                    startBtn.disabled = false;
+                    return;
+                }
+                pollCollectorStatus();
+            })
+            .catch(function(e) {
+                document.getElementById('c-status').textContent = 'Error: ' + e.message;
+                startBtn.disabled = false;
+            });
+    }
+
+    function collectorStop() {
+        var stopBtn = document.getElementById('c-stop');
+        stopBtn.disabled = true;
+        document.getElementById('c-status').textContent = 'Stopping...';
+
+        fetch('/api/collector-stop', { method: 'POST' })
+            .then(function(r){ return r.json(); })
+            .then(function(data) {
+                document.getElementById('c-log').style.display = 'none';
+                setTimeout(pollCollectorStatus, 1000);
+            })
+            .catch(function(e) {
+                document.getElementById('c-status').textContent = 'Error: ' + e.message;
+                stopBtn.disabled = false;
+            });
+    }
+
+    // Poll collector status every 10 seconds
+    pollCollectorStatus();
+    collectorPolling = setInterval(pollCollectorStatus, 10000);
+
+    // ===== Port Management =====
+    var allPorts = [];
+
+    function loadPorts() {
+        fetch('/api/ports').then(function(r){return r.json()}).then(function(data) {
+            allPorts = data || [];
+            document.getElementById('port-count').textContent = allPorts.length + ' ports';
+            // Populate country filter
+            var countries = {};
+            allPorts.forEach(function(p){ if(p.country) countries[p.country]=1; });
+            var sel = document.getElementById('port-country-filter');
+            var cur = sel.value;
+            sel.innerHTML = '<option value="">All Countries</option>';
+            Object.keys(countries).sort().forEach(function(c){
+                var o = document.createElement('option');
+                o.value = c; o.textContent = c;
+                sel.appendChild(o);
+            });
+            sel.value = cur;
+            filterPorts();
+        }).catch(function(){ document.getElementById('port-count').textContent = 'Error'; });
+    }
+
+    function filterPorts() {
+        var search = document.getElementById('port-search').value.toLowerCase();
+        var country = document.getElementById('port-country-filter').value;
+        var ptype = document.getElementById('port-type-filter').value;
+        var filtered = allPorts.filter(function(p){
+            if(search && p.name.toLowerCase().indexOf(search)===-1 && (p.country||'').toLowerCase().indexOf(search)===-1) return false;
+            if(country && p.country !== country) return false;
+            if(ptype && p.port_type !== ptype) return false;
+            return true;
+        });
+        var tbody = document.getElementById('port-body');
+        if(filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty">No ports match filters</td></tr>';
+            return;
+        }
+        tbody.innerHTML = filtered.map(function(p){
+            var typeClass = 'port-type-tag ' + (p.port_type || 'commercial');
+            var srcLabel = p.source === 'builtin' ? 'Built-in' : 'Custom';
+            var srcClass = p.source === 'builtin' ? '' : ' style="color:#4fc3f7"';
+            var actions = '';
+            if(p.source === 'custom') {
+                actions = '<button class="rm-btn" onclick="removeOverride('+p.override_id+')">Remove</button>';
+            } else {
+                actions = '<button class="rm-btn" onclick="removeBuiltinPort(\''+p.name.replace(/'/g,"\\\'")+'\')">Exclude</button>';
+            }
+            return '<tr>' +
+                '<td>'+p.name+'</td>' +
+                '<td>'+p.country+'</td>' +
+                '<td><span class="'+typeClass+'">'+p.port_type+'</span></td>' +
+                '<td>'+p.latitude.toFixed(3)+'</td>' +
+                '<td>'+p.longitude.toFixed(3)+'</td>' +
+                '<td>'+p.radius_km+' km</td>' +
+                '<td'+srcClass+'>'+srcLabel+'</td>' +
+                '<td>'+actions+'</td></tr>';
+        }).join('');
+    }
+
+    function addPort() {
+        var name = document.getElementById('p-name').value.trim();
+        var lat = parseFloat(document.getElementById('p-lat').value);
+        var lon = parseFloat(document.getElementById('p-lon').value);
+        var radius = parseFloat(document.getElementById('p-radius').value);
+        var country = document.getElementById('p-country').value.trim();
+        var ptype = document.getElementById('p-type').value;
+        if(!name || isNaN(lat) || isNaN(lon)) { alert('Name, latitude, and longitude are required.'); return; }
+        if(isNaN(radius) || radius < 1) radius = 4.0;
+        fetch('/api/ports/override', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({name:name, latitude:lat, longitude:lon, radius_km:radius, country:country, port_type:ptype, action:'add'})
+        }).then(function(r){
+            if(!r.ok) return r.json().then(function(d){throw new Error(d.error||'Failed')});
+            return r.json();
+        }).then(function(){
+            document.getElementById('p-name').value = '';
+            document.getElementById('p-lat').value = '';
+            document.getElementById('p-lon').value = '';
+            document.getElementById('p-radius').value = '4.0';
+            document.getElementById('p-country').value = '';
+            loadPorts();
+        }).catch(function(e){ alert('Error adding port: '+e.message); });
+    }
+
+    function removeOverride(id) {
+        if(!confirm('Remove this custom port?')) return;
+        fetch('/api/ports/override?id='+id, {method:'DELETE'}).then(function(r){
+            if(!r.ok) throw new Error('Failed');
+            loadPorts();
+        }).catch(function(e){ alert('Error: '+e.message); });
+    }
+
+    function removeBuiltinPort(name) {
+        if(!confirm('Exclude built-in port "'+name+'" from detection?')) return;
+        fetch('/api/ports/override', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({name:name, action:'remove'})
+        }).then(function(r){
+            if(!r.ok) return r.json().then(function(d){throw new Error(d.error||'Failed')});
+            return r.json();
+        }).then(function(){
+            loadPorts();
+        }).catch(function(e){ alert('Error: '+e.message); });
+    }
+
+    loadPorts();
+    </script>
+</body>
+</html>

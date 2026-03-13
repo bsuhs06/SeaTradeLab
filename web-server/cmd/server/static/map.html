@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeaTradeLab — Live Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+        #map{width:100vw;height:100vh}
+        .panel{position:absolute;z-index:1000;background:rgba(20,24,33,0.92);color:#e0e0e0;border-radius:8px;font-size:13px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);overflow:hidden;transition:height .2s}
+        .panel-head{padding:10px 14px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none}
+        .panel-head:hover{background:rgba(255,255,255,0.04)}
+        .panel-head .min-btn{font-size:16px;color:#888;width:20px;text-align:center}
+        .panel-body{padding:8px 14px 12px;overflow-y:auto}
+        .panel.collapsed .panel-body{display:none}
+        .stats-panel{top:10px;left:55px;min-width:200px}
+        .stat-row{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+        .stat-value{font-weight:600;color:#7cb4ff}
+        .stat-value.russian{color:#ff6b6b}
+        .stats-panel .updated{font-size:11px;color:#888;margin-top:4px;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px}
+        .stats-panel .home-link{display:block;margin-top:4px;font-size:11px;color:#7cb4ff;text-decoration:none}
+        .stats-panel .home-link:hover{text-decoration:underline}
+        .controls-panel{top:10px;right:10px;min-width:200px;max-height:calc(100vh - 80px)}
+        .controls-panel .panel-body{max-height:calc(100vh - 130px);overflow-y:auto}
+        .section-label{font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-top:8px;margin-bottom:3px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08)}
+        .section-label:first-child{margin-top:0;border-top:none;padding-top:0}
+        label{display:flex;align-items:center;gap:5px;cursor:pointer;padding:2px 0;font-size:12px}
+        input[type="checkbox"]{accent-color:#7cb4ff}
+        .legend-dot{width:9px;height:9px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);flex-shrink:0}
+        .range-row{display:flex;align-items:center;gap:6px;margin:4px 0}
+        .range-row input[type="number"]{width:60px;padding:3px 6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:12px;outline:none}
+        .range-row input[type="number"]:focus{border-color:#7cb4ff}
+        .range-row span{font-size:11px;color:#999}
+        .search-panel{top:10px;left:50%;transform:translateX(-50%);width:360px}
+        .search-panel input[type="text"]{width:100%;padding:8px 12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:13px;outline:none}
+        .search-panel input[type="text"]:focus{border-color:#7cb4ff}
+        .search-panel input::placeholder{color:#666}
+        .search-results-map{max-height:200px;overflow-y:auto;margin-top:4px}
+        .sres{padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;display:flex;justify-content:space-between}
+        .sres:hover{background:rgba(255,255,255,0.06)}
+        .sres .sn{font-weight:600}.sres .sm{color:#888;font-size:11px}
+        .sres .ru{color:#ff6b6b}
+        .time-panel{bottom:10px;left:50%;transform:translateX(-50%);width:calc(100vw - 80px);max-width:900px}
+        .time-panel .panel-body{padding:8px 14px}
+        .time-controls{display:flex;align-items:center;gap:10px}
+        .time-controls button{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px}
+        .time-controls button:hover{background:rgba(255,255,255,0.2)}
+        .time-controls button.active{background:#1a73e8;border-color:#1a73e8}
+        .time-controls input[type="range"]{flex:1;accent-color:#7cb4ff}
+        .time-controls .time-label{font-size:12px;color:#7cb4ff;min-width:150px;text-align:center;font-weight:600}
+        .time-controls .live-badge{background:#2ecc71;color:#000;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
+        .vessel-popup{font-size:13px;line-height:1.5;min-width:220px}
+        .vessel-popup .vessel-name{font-weight:700;font-size:15px;margin-bottom:4px}
+        .vessel-popup .vessel-name.russian{color:#d32f2f}
+        .vessel-popup .vessel-mmsi{color:#666;font-size:11px;margin-bottom:8px}
+        .vessel-popup table{width:100%;border-collapse:collapse}
+        .vessel-popup td{padding:2px 0}
+        .vessel-popup td:first-child{color:#888;padding-right:10px;white-space:nowrap}
+        .vessel-popup .track-btn{display:block;margin-top:8px;padding:6px 12px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;text-align:center;font-size:12px;width:100%}
+        .vessel-popup .track-btn:hover{background:#1557b0}
+        .vessel-popup .track-btn.clear-btn{background:#555;margin-top:4px}
+        .vessel-popup .track-btn.clear-btn:hover{background:#777}
+        .loading-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2000;background:rgba(20,24,33,0.95);color:#fff;padding:24px 36px;border-radius:10px;font-size:16px;text-align:center;backdrop-filter:blur(8px)}
+        .loading-overlay.hidden{display:none}
+        .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,0.2);border-top-color:#7cb4ff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .sts-marker{width:20px;height:20px;border-radius:50%;background:rgba(255,100,0,0.6);border:2px solid #ff6400;animation:pulse 2s ease-in-out infinite}
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,100,0,0.5)}50%{box-shadow:0 0 0 10px rgba(255,100,0,0)}}
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <div class="panel stats-panel">
+        <div class="panel-head" onclick="togglePanel(this)"><span>SeaTradeLab</span><span class="min-btn">-</span></div>
+        <div class="panel-body">
+            <div class="stat-row"><span>Total</span><span class="stat-value" id="stat-total">--</span></div>
+            <div class="stat-row"><span>Russian</span><span class="stat-value russian" id="stat-russian">--</span></div>
+            <div class="stat-row"><span>Positions</span><span class="stat-value" id="stat-positions">--</span></div>
+            <div class="stat-row"><span>Visible</span><span class="stat-value" id="stat-visible">--</span></div>
+            <div class="updated" id="stat-updated">Loading...</div>
+            <a href="/" class="home-link">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="panel controls-panel">
+        <div class="panel-head" onclick="togglePanel(this)"><span>Filters</span><span class="min-btn">-</span></div>
+        <div class="panel-body">
+            <div class="section-label">Flag</div>
+            <label><input type="checkbox" id="filter-russian" checked> Russian</label>
+            <label><input type="checkbox" id="filter-nonrussian" checked> Non-Russian</label>
+
+            <div class="section-label">Vessel Type</div>
+            <label><input type="checkbox" id="filter-cargo" checked> <div class="legend-dot" style="background:#1a73e8"></div> Cargo</label>
+            <label><input type="checkbox" id="filter-tanker" checked> <div class="legend-dot" style="background:#e67e22"></div> Tanker</label>
+            <label><input type="checkbox" id="filter-passenger"> <div class="legend-dot" style="background:#2ecc71"></div> Passenger</label>
+            <label><input type="checkbox" id="filter-tug"> <div class="legend-dot" style="background:#9b59b6"></div> Tug/Tow</label>
+            <label><input type="checkbox" id="filter-fishing"> <div class="legend-dot" style="background:#16a085"></div> Fishing</label>
+            <label><input type="checkbox" id="filter-other" checked> <div class="legend-dot" style="background:#95a5a6"></div> Other</label>
+
+            <div class="section-label">AIS Staleness</div>
+            <label><input type="checkbox" id="filter-hide-stale" checked> Hide stale AIS (&gt;24h)</label>
+            <label><input type="checkbox" id="filter-dark-only"> Dark vessels only</label>
+            <div class="range-row"><span>Min gap:</span><input type="number" id="dark-min-hours" value="6" min="0.5" step="0.5"><span>hours</span></div>
+
+            <div class="section-label">Movement</div>
+            <label><input type="checkbox" id="filter-moving"> Moving only (SOG &gt; 0.5)</label>
+
+            <div class="section-label">Layers</div>
+            <label><input type="checkbox" id="toggle-trails" checked> Auto-trails (zoom 10+)</label>
+            <label><input type="checkbox" id="toggle-sts"> STS event markers</label>
+            <label><input type="checkbox" id="toggle-satellite" checked> Satellite imagery</label>
+
+            <div class="section-label">STS Detection Params</div>
+            <div class="range-row"><span>Proximity:</span><input type="number" id="sts-distance" value="500" min="100" step="100"><span>m</span></div>
+            <div class="range-row"><span>Max speed:</span><input type="number" id="sts-speed" value="3.0" min="0.5" step="0.5"><span>kn</span></div>
+
+            <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:10px;color:#555">
+                <div style="display:flex;align-items:center;gap:5px;padding:1px 0"><div class="legend-dot" style="background:#d32f2f"></div> = Russian</div>
+                Arrow = heading/COG
+            </div>
+        </div>
+    </div>
+
+    <div class="panel search-panel">
+        <div class="panel-head" onclick="togglePanel(this)"><span>Vessel Search</span><span class="min-btn">-</span></div>
+        <div class="panel-body">
+            <input type="text" id="map-search" placeholder="Name, MMSI, IMO..." autocomplete="off">
+            <div class="search-results-map" id="map-search-results"></div>
+        </div>
+    </div>
+
+    <div class="panel time-panel">
+        <div class="panel-head" onclick="togglePanel(this)"><span>Time Slider</span><span class="min-btn">-</span></div>
+        <div class="panel-body">
+            <div class="time-controls">
+                <button id="time-play" onclick="togglePlay()">Play</button>
+                <input type="range" id="time-slider" min="0" max="100" value="100">
+                <span class="time-label" id="time-label"><span class="live-badge">LIVE</span></span>
+                <button id="time-live" onclick="goLive()" class="active">Live</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loading"><div class="spinner"></div><div>Loading vessel data...</div></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script>
+    // ========== PANEL MINIMIZE ==========
+    function togglePanel(el) {
+        el.parentElement.classList.toggle('collapsed');
+        var btn = el.querySelector('.min-btn');
+        btn.textContent = el.parentElement.classList.contains('collapsed') ? '+' : '-';
+    }
+
+    // ========== MAP ==========
+    var map = L.map('map', { center: [59.9, 24.9], zoom: 7, zoomControl: true, preferCanvas: true });
+    var satelliteTiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles: Esri', maxZoom: 18 });
+    var osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM', maxZoom: 19 });
+    satelliteTiles.addTo(map);
+
+    document.getElementById('toggle-satellite').addEventListener('change', function(e) {
+        if (e.target.checked) { map.removeLayer(osmTiles); satelliteTiles.addTo(map); }
+        else { map.removeLayer(satelliteTiles); osmTiles.addTo(map); }
+    });
+
+    // ========== CLASSIFICATION ==========
+    function classifyVessel(p) {
+        var t = (p.vessel_type || '').toLowerCase();
+        if (t.indexOf('tanker') >= 0) return 'tanker';
+        if (t.indexOf('cargo') >= 0 || t.indexOf('container') >= 0) return 'cargo';
+        if (t.indexOf('passenger') >= 0) return 'passenger';
+        if (t.indexOf('tug') >= 0 || t.indexOf('tow') >= 0 || t.indexOf('pilot') >= 0) return 'tug';
+        if (t.indexOf('fish') >= 0) return 'fishing';
+        return 'other';
+    }
+    function getVesselColor(p) {
+        if (p.is_russian) return '#d32f2f';
+        var c = { tanker:'#e67e22', cargo:'#1a73e8', passenger:'#2ecc71', tug:'#9b59b6', fishing:'#16a085', other:'#95a5a6' };
+        return c[classifyVessel(p)] || '#95a5a6';
+    }
+
+    // ========== ARROW ICON ==========
+    function getArrowSize(z) { return z >= 13 ? 22 : z >= 11 ? 18 : z >= 9 ? 14 : z >= 7 ? 10 : 8; }
+    function isStaleAIS(p) {
+        if (!p.timestamp) return false;
+        var gapH = (Date.now() - new Date(p.timestamp).getTime()) / 3600000;
+        return gapH >= 6;
+    }
+    function makeArrowIcon(p, z) {
+        var color = getVesselColor(p);
+        var size = p.is_russian ? getArrowSize(z) + 4 : getArrowSize(z);
+        var rot = (p.heading !== undefined && p.heading < 360) ? p.heading : (p.cog !== undefined ? p.cog : 0);
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="' + color + '" stroke="rgba(255,255,255,0.7)" stroke-width="1.2"/></svg>';
+        var style = 'transform:rotate(' + rot + 'deg);width:' + size + 'px;height:' + size + 'px;';
+        if (p.is_russian) style += 'filter:drop-shadow(0 0 3px rgba(255,0,0,0.6));';
+        var stale = isStaleAIS(p);
+        if (stale) {
+            // Disconnect icon: small SVG positioned above the arrow
+            var dSize = Math.max(10, Math.floor(size * 0.55));
+            var disconnectSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + dSize + '" height="' + dSize + '" viewBox="0 0 24 24" style="position:absolute;top:-' + (dSize + 2) + 'px;left:50%;transform:translateX(-50%);filter:drop-shadow(0 0 2px rgba(0,0,0,0.8))">' +
+                '<path d="M24 8.6L22.6 10 20 7.4l-2.3 2.3 1.4 1.4-1.4 1.4-1.4-1.4-2.3 2.3L15.4 15 14 13.6l-2.3 2.3 1.4 1.4-1.4 1.4-1.4-1.4L8 19.6 6.6 18.2l2.3-2.3-1.4-1.4 1.4-1.4 1.4 1.4L12.6 12l-1.4-1.4 1.4-1.4 1.4 1.4 2.3-2.3L15 6.9l1.4-1.4 1.4 1.4L20.1 4.6z" fill="#ff4444" stroke="#fff" stroke-width="0.8"/>' +
+                '<line x1="2" y1="2" x2="22" y2="22" stroke="#ff4444" stroke-width="2.5" stroke-linecap="round"/><line x1="2" y1="2" x2="22" y2="22" stroke="#fff" stroke-width="1" stroke-linecap="round"/>' +
+                '</svg>';
+            var totalH = size + dSize + 2;
+            var half = Math.floor(size / 2);
+            return L.divIcon({
+                html: '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;">' + disconnectSvg + '<div style="' + style + '">' + svg + '</div></div>',
+                className: '',
+                iconSize: [size, totalH],
+                iconAnchor: [half, totalH],
+                popupAnchor: [0, -totalH]
+            });
+        }
+        var half = Math.floor(size / 2);
+        return L.divIcon({ html: '<div style="' + style + '">' + svg + '</div>', className: '', iconSize: [size, size], iconAnchor: [half, half], popupAnchor: [0, -half] });
+    }
+
+    // ========== DATA ==========
+    var vesselData = null;
+    var markersLayer = L.markerClusterGroup({ maxClusterRadius: 40, disableClusteringAtZoom: 12, spiderfyOnMaxZoom: true, showCoverageOnHover: false, chunkedLoading: true, chunkInterval: 100, chunkDelay: 10 });
+    map.addLayer(markersLayer);
+    var activeTrack = null;
+    var trailsLayer = null;
+    var stsLayer = null;
+    var isLive = true;
+    var timeRangeData = null;
+
+    // ========== FILTERS ==========
+    function shouldShow(p) {
+        if (p.is_russian && !document.getElementById('filter-russian').checked) return false;
+        if (!p.is_russian && !document.getElementById('filter-nonrussian').checked) return false;
+        var cat = classifyVessel(p);
+        var fm = { cargo:'filter-cargo', tanker:'filter-tanker', passenger:'filter-passenger', tug:'filter-tug', fishing:'filter-fishing', other:'filter-other' };
+        if (fm[cat] && !document.getElementById(fm[cat]).checked) return false;
+        if (document.getElementById('filter-moving').checked && (p.sog === undefined || p.sog <= 0.5)) return false;
+
+        // Hide stale AIS (>24h) by default
+        if (!isLive) { /* skip stale filter when viewing historical */ }
+        else if (document.getElementById('filter-hide-stale').checked) {
+            var ts2 = new Date(p.timestamp);
+            var gapH2 = (Date.now() - ts2.getTime()) / 3600000;
+            if (gapH2 > 24) return false;
+        }
+
+        // AIS staleness / dark vessel filter
+        if (document.getElementById('filter-dark-only').checked) {
+            var minH = parseFloat(document.getElementById('dark-min-hours').value) || 6;
+            var ts = new Date(p.timestamp);
+            var gapH = (Date.now() - ts.getTime()) / 3600000;
+            if (gapH < minH) return false;
+        }
+        return true;
+    }
+
+    document.getElementById('filter-nonrussian').addEventListener('change', renderMarkers);
+    document.getElementById('filter-hide-stale').addEventListener('change', renderMarkers);
+    document.getElementById('filter-dark-only').addEventListener('change', renderMarkers);
+    document.getElementById('dark-min-hours').addEventListener('change', function() {
+        if (document.getElementById('filter-dark-only').checked) renderMarkers();
+    });
+
+    // ========== POPUP ==========
+    function buildPopupContent(p) {
+        var isR = p.is_russian;
+        var name = (p.name || 'Unknown') + (isR ? ' [RUS]' : '');
+        var nc = isR ? 'vessel-name russian' : 'vessel-name';
+        var h = '<div class="vessel-popup"><div class="' + nc + '">' + name + '</div>';
+        h += '<div class="vessel-mmsi">MMSI: ' + p.mmsi + '</div><table>';
+        if (p.vessel_type) h += '<tr><td>Type</td><td>' + p.vessel_type + '</td></tr>';
+        if (p.destination) h += '<tr><td>Dest</td><td>' + p.destination + '</td></tr>';
+        if (p.sog !== undefined) h += '<tr><td>Speed</td><td>' + p.sog + ' kn</td></tr>';
+        if (p.cog !== undefined) h += '<tr><td>Course</td><td>' + p.cog + '&deg;</td></tr>';
+        if (p.heading !== undefined) h += '<tr><td>Heading</td><td>' + p.heading + '&deg;</td></tr>';
+        if (p.nav_status) h += '<tr><td>Status</td><td>' + p.nav_status + '</td></tr>';
+        if (p.call_sign) h += '<tr><td>Call sign</td><td>' + p.call_sign + '</td></tr>';
+        if (p.imo) h += '<tr><td>IMO</td><td>' + p.imo + '</td></tr>';
+        if (p.draught) h += '<tr><td>Draught</td><td>' + p.draught + 'm</td></tr>';
+        if (p.sources) h += '<tr><td>Sources</td><td>' + p.sources + '</td></tr>';
+        var ts = new Date(p.timestamp);
+        var agoMin = Math.round((Date.now() - ts.getTime()) / 60000);
+        var agoStr = agoMin < 60 ? agoMin + ' min ago' : Math.floor(agoMin/60) + 'h ' + (agoMin%60) + 'm ago';
+        h += '<tr><td>Last AIS</td><td><b>' + agoStr + '</b> (' + ts.toLocaleTimeString() + ')</td></tr>';
+        h += '</table>';
+        h += '<button class="track-btn" onclick="loadTrack(' + p.mmsi + ')">Show 7-day track</button>';
+        if (activeTrack) h += '<button class="track-btn clear-btn" onclick="clearTrack()">Clear track</button>';
+        h += '</div>';
+        return h;
+    }
+
+    // ========== RENDER ==========
+    function renderMarkers() {
+        if (!vesselData) return;
+        markersLayer.clearLayers();
+        var count = 0, zoom = map.getZoom();
+        for (var i = 0; i < vesselData.features.length; i++) {
+            var f = vesselData.features[i], p = f.properties;
+            if (!shouldShow(p)) continue;
+            var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
+            if (lat === 0 && lng === 0) continue;
+            var marker = L.marker([lat, lng], { icon: makeArrowIcon(p, zoom) });
+            marker.bindPopup(function(pp) { return function() { return buildPopupContent(pp); }; }(p), { maxWidth: 300 });
+            markersLayer.addLayer(marker);
+            count++;
+        }
+        document.getElementById('stat-visible').textContent = count.toLocaleString();
+        if (isLive) fetchTrailsIfZoomed();
+    }
+
+    map.on('zoomend', function() { if (vesselData) renderMarkers(); });
+
+    // ========== AUTO-TRAILS ==========
+    var trailTimer = null;
+    function fetchTrailsIfZoomed() {
+        if (trailsLayer) { map.removeLayer(trailsLayer); trailsLayer = null; }
+        if (!document.getElementById('toggle-trails').checked) return;
+        if (map.getZoom() < 10) return;
+        if (trailTimer) clearTimeout(trailTimer);
+        trailTimer = setTimeout(doFetchTrails, 500);
+    }
+    function doFetchTrails() {
+        var b = map.getBounds();
+        var url = '/api/trails?south=' + b.getSouth() + '&west=' + b.getWest() + '&north=' + b.getNorth() + '&east=' + b.getEast() + '&hours=24';
+        fetch(url).then(function(r){return r.json()}).then(function(trails) {
+            if (trailsLayer) map.removeLayer(trailsLayer);
+            trailsLayer = L.layerGroup().addTo(map);
+            var keys = Object.keys(trails);
+            for (var i = 0; i < keys.length; i++) {
+                var mmsiStr = keys[i], coords = trails[mmsiStr];
+                if (coords.length < 2) continue;
+                var latlngs = [];
+                for (var j = 0; j < coords.length; j++) latlngs.push([coords[j][1], coords[j][0]]);
+                var color = '#888';
+                if (vesselData) {
+                    for (var k = 0; k < vesselData.features.length; k++) {
+                        if (String(vesselData.features[k].properties.mmsi) === mmsiStr) {
+                            if (!shouldShow(vesselData.features[k].properties)) { color = null; break; }
+                            color = getVesselColor(vesselData.features[k].properties);
+                            break;
+                        }
+                    }
+                }
+                if (color === null) continue;
+                L.polyline(latlngs, { color: color, weight: 2, opacity: 0.6, dashArray: '4,4', interactive: false }).addTo(trailsLayer);
+            }
+        }).catch(function(e) { console.error('Trail error:', e); });
+    }
+    map.on('moveend', function() { if (isLive) fetchTrailsIfZoomed(); });
+    document.getElementById('toggle-trails').addEventListener('change', fetchTrailsIfZoomed);
+
+    // ========== SINGLE VESSEL TRACK ==========
+    function loadTrack(mmsi) {
+        clearTrack();
+        fetch('/api/vessels/' + mmsi + '/track?hours=168').then(function(r){return r.json()}).then(function(data) {
+            if (!data.track || !data.track.coordinates || data.track.coordinates.length < 2) { alert('No track data.'); return; }
+            var coords = [];
+            for (var i = 0; i < data.track.coordinates.length; i++) coords.push([data.track.coordinates[i][1], data.track.coordinates[i][0]]);
+            activeTrack = L.layerGroup().addTo(map);
+            L.polyline(coords, { color: '#ff0', weight: 3, opacity: 0.85, dashArray: '8,6' }).addTo(activeTrack);
+            L.circleMarker(coords[0], { radius: 5, fillColor: '#0f0', fillOpacity: 1, color: '#fff', weight: 1 }).addTo(activeTrack).bindTooltip('Start (' + data.point_count + ' pts)');
+            L.circleMarker(coords[coords.length-1], { radius: 5, fillColor: '#f00', fillOpacity: 1, color: '#fff', weight: 1 }).addTo(activeTrack).bindTooltip('Current');
+            map.fitBounds(L.polyline(coords).getBounds(), { padding: [40, 40] });
+        }).catch(function(e) { console.error('Track error:', e); });
+    }
+    window.loadTrack = loadTrack;
+    function clearTrack() { if (activeTrack) { map.removeLayer(activeTrack); activeTrack = null; } }
+    window.clearTrack = clearTrack;
+
+    // ========== STS EVENT MARKERS ==========
+    function loadSTSEvents() {
+        if (stsLayer) { map.removeLayer(stsLayer); stsLayer = null; }
+        if (!document.getElementById('toggle-sts').checked) return;
+        fetch('/api/sts-events?hours=168').then(function(r){return r.json()}).then(function(data) {
+            if (!data.events || data.events.length === 0) return;
+            stsLayer = L.layerGroup().addTo(map);
+            for (var i = 0; i < data.events.length; i++) {
+                var e = data.events[i];
+                if (!e.avg_lat || !e.avg_lon) continue;
+                var icon = L.divIcon({ html: '<div class="sts-marker"></div>', className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
+                var startStr = new Date(e.start_time).toLocaleString();
+                var popup = '<div style="font-size:13px"><b>STS Event</b><br>' +
+                    '<b>' + (e.name_a || 'MMSI ' + e.mmsi_a) + '</b> + <b>' + (e.name_b || 'MMSI ' + e.mmsi_b) + '</b><br>' +
+                    'Time: ' + startStr + '<br>' +
+                    'Duration: ' + e.duration_minutes + ' min<br>' +
+                    'Distance: ' + (e.min_distance_m ? Math.round(e.min_distance_m) + 'm' : '--') + '<br>' +
+                    '<span style="color:' + (e.confidence === 'high' ? '#ff6b6b' : e.confidence === 'medium' ? '#ffa726' : '#66bb6a') + '">' + e.confidence.toUpperCase() + '</span>' +
+                    '<br><button onclick="investigateSTS(\'' + e.start_time + '\',' + e.avg_lat + ',' + e.avg_lon + ',' + e.mmsi_a + ',' + e.mmsi_b + ')" style="margin-top:6px;padding:4px 10px;background:#ff6400;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">Investigate Scene</button>' +
+                    ' <button onclick="showSTSVessels(' + e.mmsi_a + ',' + e.mmsi_b + ')" style="margin-top:6px;padding:4px 10px;background:#1a73e8;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">Show Tracks</button>' +
+                    '</div>';
+                L.marker([e.avg_lat, e.avg_lon], { icon: icon }).bindPopup(popup).addTo(stsLayer);
+
+                // Show vessel A position
+                if (e.lat_a && e.lon_a) {
+                    var nameA = e.name_a || 'MMSI ' + e.mmsi_a;
+                    L.circleMarker([e.lat_a, e.lon_a], { radius: 6, fillColor: '#ff6400', fillOpacity: 0.9, color: '#fff', weight: 1.5 })
+                        .bindTooltip(nameA, { permanent: false, direction: 'top', offset: [0, -8] })
+                        .addTo(stsLayer);
+                    // Line from vessel A to STS midpoint
+                    L.polyline([[e.lat_a, e.lon_a], [e.avg_lat, e.avg_lon]], { color: '#ff6400', weight: 1.5, opacity: 0.5, dashArray: '4,4', interactive: false }).addTo(stsLayer);
+                }
+                // Show vessel B position
+                if (e.lat_b && e.lon_b) {
+                    var nameB = e.name_b || 'MMSI ' + e.mmsi_b;
+                    L.circleMarker([e.lat_b, e.lon_b], { radius: 6, fillColor: '#ff9800', fillOpacity: 0.9, color: '#fff', weight: 1.5 })
+                        .bindTooltip(nameB, { permanent: false, direction: 'top', offset: [0, -8] })
+                        .addTo(stsLayer);
+                    L.polyline([[e.lat_b, e.lon_b], [e.avg_lat, e.avg_lon]], { color: '#ff9800', weight: 1.5, opacity: 0.5, dashArray: '4,4', interactive: false }).addTo(stsLayer);
+                }
+            }
+        }).catch(function(){});
+    }
+
+    function showSTSVessels(mmsiA, mmsiB) {
+        loadTrack(mmsiA);
+        // Load second track after a brief delay
+        setTimeout(function() {
+            fetch('/api/vessels/' + mmsiB + '/track?hours=168').then(function(r){return r.json()}).then(function(data) {
+                if (!data.track || !data.track.coordinates || data.track.coordinates.length < 2) return;
+                var coords = [];
+                for (var i = 0; i < data.track.coordinates.length; i++) coords.push([data.track.coordinates[i][1], data.track.coordinates[i][0]]);
+                if (!activeTrack) activeTrack = L.layerGroup().addTo(map);
+                L.polyline(coords, { color: '#f90', weight: 3, opacity: 0.85, dashArray: '8,6' }).addTo(activeTrack);
+                L.circleMarker(coords[0], { radius: 5, fillColor: '#0f0', fillOpacity: 1, color: '#fff', weight: 1 }).addTo(activeTrack);
+                L.circleMarker(coords[coords.length-1], { radius: 5, fillColor: '#f00', fillOpacity: 1, color: '#fff', weight: 1 }).addTo(activeTrack);
+            }).catch(function(){});
+        }, 500);
+    }
+    window.showSTSVessels = showSTSVessels;
+
+    function investigateSTS(startTime, lat, lon, mmsiA, mmsiB) {
+        // Set map to the STS location
+        map.setView([lat, lon], 12);
+        // Move time slider to the event time
+        var eventMs = new Date(startTime).getTime();
+        if (timeRangeData) {
+            var slider = document.getElementById('time-slider');
+            var step = Math.round((eventMs - timeRangeData.min) / (15 * 60000));
+            step = Math.max(0, Math.min(parseInt(slider.max), step));
+            slider.value = step;
+            slider.dispatchEvent(new Event('input'));
+        } else {
+            // Fallback: directly load historical
+            isLive = false;
+            document.getElementById('time-live').classList.remove('active');
+            var d = new Date(startTime);
+            document.getElementById('time-label').textContent = d.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'});
+            loadHistorical(startTime);
+        }
+        // Also load tracks for both vessels
+        showSTSVessels(mmsiA, mmsiB);
+    }
+    window.investigateSTS = investigateSTS;
+    document.getElementById('toggle-sts').addEventListener('change', loadSTSEvents);
+
+    // ========== VESSEL SEARCH ==========
+    var searchInput = document.getElementById('map-search');
+    var searchResultsDiv = document.getElementById('map-search-results');
+    var searchT = null;
+    searchInput.addEventListener('input', function() {
+        var q = searchInput.value.trim();
+        if (q.length < 2) { searchResultsDiv.innerHTML = ''; return; }
+        if (searchT) clearTimeout(searchT);
+        searchT = setTimeout(function() {
+            fetch('/api/search?q=' + encodeURIComponent(q) + '&limit=10').then(function(r){return r.json()}).then(function(data) {
+                if (!data.features || data.features.length === 0) { searchResultsDiv.innerHTML = '<div class="sres"><span class="sm">No results</span></div>'; return; }
+                var html = '';
+                for (var i = 0; i < data.features.length; i++) {
+                    var p = data.features[i].properties, c = data.features[i].geometry.coordinates;
+                    var isR = p.is_russian;
+                    html += '<div class="sres" onclick="flyToVessel(' + c[1] + ',' + c[0] + ',' + p.mmsi + ')">';
+                    html += '<span class="sn' + (isR ? ' ru' : '') + '">' + (p.name || 'Unknown') + (isR ? ' [RUS]' : '') + '</span>';
+                    html += '<span class="sm">' + p.mmsi + '</span>';
+                    html += '</div>';
+                }
+                searchResultsDiv.innerHTML = html;
+            }).catch(function(){});
+        }, 300);
+    });
+
+    function flyToVessel(lat, lng, mmsi) {
+        map.setView([lat, lng], 14);
+        searchInput.value = '';
+        searchResultsDiv.innerHTML = '';
+        // Find and open the marker popup
+        markersLayer.eachLayer(function(layer) {
+            if (layer.getLatLng && Math.abs(layer.getLatLng().lat - lat) < 0.001 && Math.abs(layer.getLatLng().lng - lng) < 0.001) {
+                layer.openPopup();
+            }
+        });
+    }
+    window.flyToVessel = flyToVessel;
+
+    // ========== TIME SLIDER ==========
+    var playInterval = null;
+
+    function initTimeSlider() {
+        fetch('/api/time-range').then(function(r){return r.json()}).then(function(data) {
+            if (!data.min || !data.max) return;
+            var maxTime = new Date(data.max).getTime();
+            // Limit slider to last 7 days for usability
+            var sevenDaysMs = 7 * 24 * 3600000;
+            var minTime = maxTime - sevenDaysMs;
+            timeRangeData = { min: minTime, max: maxTime };
+            var slider = document.getElementById('time-slider');
+            slider.min = 0;
+            // Use 15-minute steps (672 steps for 7 days)
+            slider.max = Math.floor((timeRangeData.max - timeRangeData.min) / (15 * 60000));
+            slider.value = slider.max;
+        }).catch(function(){});
+    }
+
+    document.getElementById('time-slider').addEventListener('input', function() {
+        if (!timeRangeData) return;
+        isLive = false;
+        document.getElementById('time-live').classList.remove('active');
+        var slider = document.getElementById('time-slider');
+        var ms = timeRangeData.min + parseInt(slider.value) * 15 * 60000;
+        var d = new Date(ms);
+        document.getElementById('time-label').textContent = d.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'});
+        loadHistorical(d.toISOString());
+    });
+
+    function loadHistorical(isoTime) {
+        fetch('/api/historical?time=' + encodeURIComponent(isoTime)).then(function(r){return r.json()}).then(function(data) {
+            vesselData = data;
+            renderMarkers();
+        }).catch(function(e) { console.error('Historical error:', e); });
+    }
+
+    function goLive() {
+        isLive = true;
+        if (playInterval) { clearInterval(playInterval); playInterval = null; document.getElementById('time-play').textContent = 'Play'; }
+        document.getElementById('time-live').classList.add('active');
+        document.getElementById('time-label').innerHTML = '<span class="live-badge">LIVE</span>';
+        if (timeRangeData) { document.getElementById('time-slider').value = document.getElementById('time-slider').max; }
+        fetchVessels();
+    }
+    window.goLive = goLive;
+
+    function togglePlay() {
+        if (playInterval) {
+            clearInterval(playInterval);
+            playInterval = null;
+            document.getElementById('time-play').textContent = 'Play';
+            return;
+        }
+        document.getElementById('time-play').textContent = 'Pause';
+        var slider = document.getElementById('time-slider');
+        if (parseInt(slider.value) >= parseInt(slider.max)) slider.value = 0;
+        playInterval = setInterval(function() {
+            var val = parseInt(slider.value) + 1;
+            if (val > parseInt(slider.max)) { clearInterval(playInterval); playInterval = null; document.getElementById('time-play').textContent = 'Play'; goLive(); return; }
+            slider.value = val;
+            slider.dispatchEvent(new Event('input'));
+        }, 1000);
+    }
+    window.togglePlay = togglePlay;
+
+    // ========== DATA FETCH ==========
+    function fetchVessels() {
+        fetch('/api/vessels').then(function(r){return r.json()}).then(function(data) {
+            vesselData = data;
+            renderMarkers();
+            document.getElementById('loading').classList.add('hidden');
+        }).catch(function(e) {
+            console.error('Vessel error:', e);
+            document.getElementById('loading').innerHTML = '<div style="color:#ff6b6b;">Failed to load data.</div>';
+        });
+    }
+
+    function fetchStats() {
+        fetch('/api/stats').then(function(r){return r.json()}).then(function(s) {
+            document.getElementById('stat-total').textContent = s.total_vessels.toLocaleString();
+            document.getElementById('stat-russian').textContent = s.russian_vessels.toLocaleString();
+            document.getElementById('stat-positions').textContent = s.total_positions.toLocaleString();
+            if (s.last_collected_at) {
+                var d = new Date(s.last_collected_at);
+                document.getElementById('stat-updated').textContent = 'Last: ' + d.toLocaleString();
+            }
+        }).catch(function(){});
+    }
+
+    // ========== FILTER EVENTS ==========
+    var filterIds = ['filter-russian','filter-cargo','filter-tanker','filter-passenger','filter-tug','filter-fishing','filter-other','filter-moving'];
+    for (var fi = 0; fi < filterIds.length; fi++) document.getElementById(filterIds[fi]).addEventListener('change', renderMarkers);
+
+    // ========== HASH NAVIGATION ==========
+    function handleHash() {
+        var hash = window.location.hash;
+        if (!hash) return;
+        var gotoMatch = hash.match(/goto=([-\d.]+),([-\d.]+),(\d+)/);
+        if (gotoMatch) map.setView([parseFloat(gotoMatch[1]), parseFloat(gotoMatch[2])], parseInt(gotoMatch[3]));
+        var searchMatch = hash.match(/search=(\d+)/);
+        if (searchMatch) { document.getElementById('map-search').value = searchMatch[1]; document.getElementById('map-search').dispatchEvent(new Event('input')); }
+    }
+
+    // ========== GO ==========
+    fetchVessels();
+    fetchStats();
+    initTimeSlider();
+    loadSTSEvents();
+    handleHash();
+    setInterval(function() { if (isLive) fetchVessels(); }, 5 * 60 * 1000);
+    setInterval(fetchStats, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
