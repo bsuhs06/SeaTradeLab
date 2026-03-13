@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SeaTradeLab — Open-Source Maritime Intelligence</title>
+  <meta name="description" content="Track shadow fleet activity in the Baltic Sea using free AIS data. Detect ship-to-ship transfers, AIS gaps, and sanctioned port visits.">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0b0e17;
+      --surface: #131829;
+      --border: #1e2640;
+      --text: #c8cdd8;
+      --text-dim: #6b7394;
+      --accent: #4fc3f7;
+      --accent-dim: rgba(79, 195, 247, 0.12);
+      --red: #ef5350;
+      --green: #66bb6a;
+      --orange: #ffa726;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Hero */
+    .hero {
+      padding: 5rem 0 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero .tagline {
+      font-size: 1.15rem;
+      color: var(--text-dim);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.7rem 1.6rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .btn-primary:hover { background: #81d4fa; text-decoration: none; }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+
+    /* What it does */
+    .section {
+      padding: 3.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .section:last-child { border-bottom: none; }
+    .section h2 {
+      font-size: 1.5rem;
+      color: #fff;
+      margin-bottom: 1.5rem;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    .feature h3 {
+      color: #fff;
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+    }
+    .feature p {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+    .feature .icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Architecture */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .arch-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .arch-item h3 {
+      color: var(--accent);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.4rem;
+    }
+    .arch-item p {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+
+    /* Quick start */
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: var(--text);
+    }
+    pre .comment { color: var(--text-dim); }
+    pre .cmd { color: var(--green); }
+
+    /* Data sources */
+    .source-list {
+      list-style: none;
+    }
+    .source-list li {
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+    }
+    .source-list li:last-child { border-bottom: none; }
+    .source-list strong { color: #fff; }
+    .source-list .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    .tag-free { background: rgba(102, 187, 106, 0.15); color: var(--green); }
+    .tag-key { background: rgba(255, 167, 38, 0.15); color: var(--orange); }
+
+    /* Footer */
+    .footer {
+      padding: 2rem 0;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 600px) {
+      .hero { padding: 3rem 0 2rem; }
+      .hero h1 { font-size: 2rem; }
+      .section { padding: 2.5rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1>Sea<span>Trade</span>Lab</h1>
+      <p class="tagline">Open-source maritime intelligence. Track shadow fleet activity in the Baltic Sea using free AIS data.</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/bsuhs/seatradelab" class="btn btn-primary">View on GitHub</a>
+        <a href="#quickstart" class="btn btn-secondary">Quick Start</a>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>What it detects</h2>
+      <div class="features">
+        <div class="feature">
+          <div class="icon">🔄</div>
+          <h3>Ship-to-Ship Transfers</h3>
+          <p>KD-tree proximity search with geodesic distance, speed filtering, and port exclusion zones to find vessels rendezvousing at sea.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">📡</div>
+          <h3>AIS Gaps</h3>
+          <p>Vessels going dark — transponders turned off to avoid tracking. Flags gaps with last-known position to distinguish from coverage edges.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">🚢</div>
+          <h3>Port Visit Tracking</h3>
+          <p>Detects non-Russian vessels visiting Russian oil terminals (Primorsk, Ust-Luga, Vysotsk, etc.) using MMSI prefix flag identification.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">🗺️</div>
+          <h3>Live Vessel Map</h3>
+          <p>Satellite view of ~18,000 vessels with track history, flag filtering, and real-time position updates from Baltic AIS sources.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Architecture</h2>
+      <div class="arch-grid">
+        <div class="arch-item">
+          <h3>AIS Collector</h3>
+          <p>Go service polling AIS sources on a 10-minute interval. Stores positions in PostGIS.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Web Server</h3>
+          <p>Go REST API serving vessel data, tracks, STS events, and analytics results.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Frontend</h3>
+          <p>Vue 3 + TypeScript SPA with Leaflet satellite map and analytics dashboard.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Analytics</h3>
+          <p>Python detection algorithms — STS, AIS gaps, port visits. Runs on-demand or scheduled.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Database</h3>
+          <p>PostgreSQL 16 + PostGIS for spatial queries. Shared by all services.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Data Source</h3>
+          <p>Finnish Digitraffic maritime API. Free, no signup, covers the Baltic Sea.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="quickstart">
+      <h2>Quick start</h2>
+      <pre><span class="comment"># Clone and configure</span>
+<span class="cmd">git clone https://github.com/bsuhs/seatradelab.git</span>
+<span class="cmd">cd seatradelab</span>
+<span class="cmd">cp .env.example .env</span>           <span class="comment"># set your database credentials</span>
+
+<span class="comment"># Start the database</span>
+<span class="cmd">docker compose up -d</span>
+
+<span class="comment"># Collect AIS data</span>
+<span class="cmd">cd ais-collector && make run</span>
+
+<span class="comment"># Start the API server</span>
+<span class="cmd">cd web-server && go run ./cmd/server/</span>
+
+<span class="comment"># Start the frontend (dev mode)</span>
+<span class="cmd">cd frontend && npm run dev</span>
+
+<span class="comment"># Run detection algorithms</span>
+<span class="cmd">cd analytics && python -m src.run --detect</span></pre>
+    </section>
+
+    <section class="section">
+      <h2>Data sources</h2>
+      <ul class="source-list">
+        <li><strong>Finnish Digitraffic</strong> — Baltic Sea + Gulf of Finland. ~18,000 vessels per poll including ~1,300 Russian-flagged. <span class="tag tag-free">Free</span></li>
+        <li><strong>AISStream</strong> — WebSocket stream with configurable bounding boxes. Global coverage. <span class="tag tag-key">API key</span></li>
+        <li><strong>AISHub</strong> — Community AIS data sharing network. <span class="tag tag-key">Registration</span></li>
+      </ul>
+      <p style="margin-top: 1rem; color: var(--text-dim); font-size: 0.9rem;">The collector has a pluggable source architecture — add new sources by implementing a single Go interface.</p>
+    </section>
+
+    <section class="section">
+      <h2>Why this exists</h2>
+      <p style="max-width: 680px;">Commercial maritime intelligence platforms cost $50K+/year. This project explores what's possible with free public AIS data, PostGIS spatial queries, and straightforward detection algorithms. It's a research tool, not a production surveillance system.</p>
+    </section>
+
+    <footer class="footer">
+      SeaTradeLab — MIT License
+    </footer>
+  </div>
+</body>
+</html>
