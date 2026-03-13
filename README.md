@@ -2,8 +2,6 @@
 
 Tracks maritime vessels in the Baltic Sea using free AIS data, with a focus on detecting shadow fleet activity — ship-to-ship transfers, AIS gaps, and non-Russian vessels visiting Russian oil terminals.
 
-Built because commercial maritime intelligence tools cost $50K+/year and I wanted to see what you could do with public data and some PostGIS queries.
-
 ## What's in here
 
 **[ais-collector/](./ais-collector/)** — Go service that polls AIS sources (primarily Finnish Digitraffic) and stores vessel positions in Postgres. Runs on a 10-minute interval. See its README for setup.
