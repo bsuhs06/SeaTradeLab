@@ -1,0 +1,97 @@
+# Local development: runs the full stack (database + collector + scheduled backups).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# For database-only (default): docker compose up -d
+
+services:
+  collector:
+    build:
+      context: ./ais-collector
+      dockerfile: Dockerfile
+    container_name: ais-collector
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-ais}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ais_data}?sslmode=disable"
+      POLL_INTERVAL_MINUTES: "10"
+      ENABLE_DIGITRAFFIC: "true"
+      ENABLE_MOCK_SOURCE: "false"
+      AISSTREAM_API_KEY: "${AISSTREAM_API_KEY:-}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16-alpine
+    container_name: ais-backup
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-ais}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-ais_data}
+      BACKUP_INTERVAL_SECONDS: "21600"   # 6 hours
+      KEEP_BACKUPS: "10"
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== AIS Backup Sidecar ==="
+        echo "Interval: $${BACKUP_INTERVAL_SECONDS}s ($(($${BACKUP_INTERVAL_SECONDS} / 3600))h)"
+        echo "Retention: $${KEEP_BACKUPS} backups"
+        mkdir -p /backups
+        while true; do
+          STAMP=$$(date +%Y%m%d_%H%M%S)
+          FILE="/backups/ais_data_$${STAMP}.sql.gz"
+          echo "[$$(date)] Backing up to $${FILE} ..."
+          if pg_dump -h "$$PGHOST" -p "$$PGPORT" -U "$$PGUSER" -d "$$PGDATABASE" \
+              --no-owner --no-privileges --clean --if-exists | gzip > "$$FILE"; then
+            SIZE=$$(du -h "$$FILE" | cut -f1)
+            echo "[$$(date)] OK ($${SIZE})"
+          else
+            echo "[$$(date)] ERROR: pg_dump failed" >&2
+            rm -f "$$FILE"
+          fi
+          COUNT=$$(find /backups -name 'ais_data_*.sql.gz' -type f | wc -l)
+          if [ "$$COUNT" -gt "$$KEEP_BACKUPS" ]; then
+            REMOVE=$$(( COUNT - KEEP_BACKUPS ))
+            find /backups -name 'ais_data_*.sql.gz' -type f | sort | head -n "$$REMOVE" | while read -r old; do
+              rm -f "$$old"
+              echo "  Rotated: $$(basename $$old)"
+            done
+          fi
+          echo "[$$(date)] Next backup in $${BACKUP_INTERVAL_SECONDS}s. Backups on disk: $$(find /backups -name 'ais_data_*.sql.gz' -type f | wc -l)"
+          sleep "$$BACKUP_INTERVAL_SECONDS"
+        done
+
+  sts-scheduler:
+    image: python:3.13-slim
+    container_name: ais-sts-scheduler
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-ais}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ais_data}?sslmode=disable"
+      STS_INTERVAL_SECONDS: "3600"  # 1 hour
+      STS_LOOKBACK_HOURS: "2"      # scan last 2h each run
+    volumes:
+      - ./analytics:/app
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== STS Detection Scheduler ==="
+        echo "Interval: $${STS_INTERVAL_SECONDS}s"
+        echo "Lookback: $${STS_LOOKBACK_HOURS}h"
+        pip install --quiet -r requirements.txt
+        while true; do
+          echo "[$$(date)] Running STS detection..."
+          python -m src.run --sts --hours "$${STS_LOOKBACK_HOURS}" 2>&1 || echo "[$$(date)] STS detection failed"
+          echo "[$$(date)] Next run in $${STS_INTERVAL_SECONDS}s"
+          sleep "$$STS_INTERVAL_SECONDS"
+        done
