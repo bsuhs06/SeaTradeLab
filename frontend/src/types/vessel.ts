@@ -64,10 +64,13 @@ export interface Stats {
 }
 
 export interface STSEvent {
+  id: number
   mmsi_a: number
   mmsi_b: number
   name_a?: string
   name_b?: string
+  type_a?: string
+  type_b?: string
   start_time: string
   end_time: string
   duration_minutes: number
@@ -79,6 +82,9 @@ export interface STSEvent {
   lat_b?: number
   lon_b?: number
   confidence: 'high' | 'medium' | 'low'
+  reviewed: boolean
+  tag?: string
+  notes?: string
 }
 
 export interface STSResponse {
@@ -160,4 +166,26 @@ export interface CollectorStatus {
   last_collected?: string
   binary_found: boolean
   log?: string
+}
+
+export interface SpoofedVessel {
+  mmsi: number
+  name?: string
+  vessel_type?: string
+  reason: 'teleport' | 'impossible_speed' | 'suspicious_speed'
+  lat_from: number
+  lon_from: number
+  lat_to: number
+  lon_to: number
+  speed_knots: number
+  distance_km: number
+  time_delta_s: number
+  timestamp_1: string
+  timestamp_2: string
+}
+
+export interface SpoofedResponse {
+  vessels: SpoofedVessel[]
+  count: number
+  hours: number
 }

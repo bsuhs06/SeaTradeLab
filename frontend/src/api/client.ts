@@ -11,6 +11,7 @@ import type {
   AnalyticsRequest,
   AnalyticsStatus,
   CollectorStatus,
+  SpoofedResponse,
 } from '@/types/vessel'
 
 const BASE = '/api'
@@ -37,8 +38,22 @@ async function del<T>(path: string): Promise<T> {
   return res.json()
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json()
+}
+
 export const api = {
-  getVessels: () => get<VesselFeatureCollection>('/vessels'),
+  getVessels: (bbox?: { south: number; west: number; north: number; east: number }) => {
+    let url = '/vessels'
+    if (bbox) url += `?south=${bbox.south}&west=${bbox.west}&north=${bbox.north}&east=${bbox.east}`
+    return get<VesselFeatureCollection>(url)
+  },
 
   getVesselTrack: (mmsi: number, hours = 168) =>
     get<VesselTrack>(`/vessels/${mmsi}/track?hours=${hours}`),
@@ -48,8 +63,14 @@ export const api = {
   getTrails: (south: number, west: number, north: number, east: number, hours = 24) =>
     get<TrailsMap>(`/trails?south=${south}&west=${west}&north=${north}&east=${east}&hours=${hours}`),
 
-  getSTSEvents: (hours = 168, limit = 100) =>
+  getSTSEvents: (hours = 168, limit = 500) =>
     get<STSResponse>(`/sts-events?hours=${hours}&limit=${limit}`),
+
+  updateSTSEvent: (id: number, data: { confidence: string; reviewed: boolean; tag?: string | null; notes?: string | null }) =>
+    patch<{ status: string }>(`/sts-events/${id}`, data),
+
+  getSpoofedVessels: (hours = 24, limit = 200) =>
+    get<SpoofedResponse>(`/spoofed-vessels?hours=${hours}&limit=${limit}`),
 
   searchVessels: (q: string, limit = 20) =>
     get<VesselFeatureCollection>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),

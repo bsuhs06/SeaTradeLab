@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { api } from '@/api/client'
 import type { Stats, STSEvent, VesselFeature, PortVisit } from '@/types/vessel'
 import StatsBar from '@/components/dashboard/StatsBar.vue'
@@ -17,6 +17,21 @@ const stsEvents = ref<STSEvent[]>([])
 const darkVessels = ref<VesselFeature[]>([])
 const portVisits = ref<PortVisit[]>([])
 const portVisitCount = ref(0)
+
+const collapsed = reactive<Record<string, boolean>>({
+  search: false,
+  ports: false,
+  sts: false,
+  dark: false,
+  analytics: true,
+  collector: true,
+  portMgmt: true,
+  faq: true,
+})
+
+function toggle(key: string) {
+  collapsed[key] = !collapsed[key]
+}
 
 async function loadStats() {
   try { stats.value = await api.getStats() } catch { /* ignore */ }
@@ -57,9 +72,8 @@ onMounted(refreshAll)
 <template>
   <div class="dashboard">
     <div class="header">
-      <h1>SeaTradeLab</h1>
-      <div class="sub">Baltic AIS monitoring and shadow fleet detection</div>
-      <div class="tag">Real-time maritime surveillance and ship-to-ship transfer detection</div>
+      <h1>Sea-Trade Lab</h1>
+      <div class="sub">Real-time AIS monitoring, ship-to-ship transfer, and shadow fleet detection</div>
       <div class="nav">
         <router-link to="/map" class="pri">Open Live Map</router-link>
         <a href="#events" class="sec">STS Events</a>
@@ -79,35 +93,88 @@ onMounted(refreshAll)
         :port-visit-count="portVisitCount"
       />
 
-      <VesselSearch />
-
-      <div id="port-visitors">
-        <PortVisitsTable :visits="portVisits" @mode-change="loadPortVisits" />
+      <div class="section">
+        <div class="section-bar" @click="toggle('search')">
+          <span class="section-title">Vessel Search</span>
+          <span class="chevron" :class="{ open: !collapsed.search }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.search" class="section-body">
+          <VesselSearch />
+        </div>
       </div>
 
-      <div class="two-col" id="events">
-        <StsEventsTable :events="stsEvents" />
-        <DarkVesselsTable :vessels="darkVessels" />
+      <div id="port-visitors" class="section">
+        <div class="section-bar" @click="toggle('ports')">
+          <span class="section-title">Vessels Visiting Russian Ports</span>
+          <span class="chevron" :class="{ open: !collapsed.ports }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.ports" class="section-body">
+          <PortVisitsTable :visits="portVisits" @mode-change="loadPortVisits" />
+        </div>
       </div>
 
-      <div id="analytics">
-        <AnalyticsPanel @completed="refreshAll" />
+      <div id="events" class="section">
+        <div class="section-bar" @click="toggle('sts')">
+          <span class="section-title">STS Events</span>
+          <span class="chevron" :class="{ open: !collapsed.sts }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.sts" class="section-body">
+          <StsEventsTable :events="stsEvents" @updated="loadSTS" />
+        </div>
       </div>
 
-      <div id="collector">
-        <CollectorPanel />
+      <div class="section">
+        <div class="section-bar" @click="toggle('dark')">
+          <span class="section-title">Dark Vessels</span>
+          <span class="chevron" :class="{ open: !collapsed.dark }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.dark" class="section-body">
+          <DarkVesselsTable :vessels="darkVessels" />
+        </div>
       </div>
 
-      <div id="port-mgmt">
-        <PortManager />
+      <div id="analytics" class="section">
+        <div class="section-bar" @click="toggle('analytics')">
+          <span class="section-title">Run Analytics</span>
+          <span class="chevron" :class="{ open: !collapsed.analytics }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.analytics" class="section-body">
+          <AnalyticsPanel @completed="refreshAll" />
+        </div>
       </div>
 
-      <div id="faq">
-        <FaqSection />
+      <div id="collector" class="section">
+        <div class="section-bar" @click="toggle('collector')">
+          <span class="section-title">AIS Collector</span>
+          <span class="chevron" :class="{ open: !collapsed.collector }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.collector" class="section-body">
+          <CollectorPanel />
+        </div>
+      </div>
+
+      <div id="port-mgmt" class="section">
+        <div class="section-bar" @click="toggle('portMgmt')">
+          <span class="section-title">Port Definitions</span>
+          <span class="chevron" :class="{ open: !collapsed.portMgmt }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.portMgmt" class="section-body">
+          <PortManager />
+        </div>
+      </div>
+
+      <div id="faq" class="section">
+        <div class="section-bar" @click="toggle('faq')">
+          <span class="section-title">How It Works</span>
+          <span class="chevron" :class="{ open: !collapsed.faq }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.faq" class="section-body">
+          <FaqSection />
+        </div>
       </div>
     </div>
 
-    <div class="footer">SeaTradeLab | Data: Finnish Digitraffic Maritime API</div>
+    <div class="footer">SeaTradeLab | Data: Finnish Digitraffic Maritime API, aisstream.io</div>
   </div>
 </template>
 
@@ -136,6 +203,21 @@ a:hover { text-decoration: underline; }
 .sec { background: rgba(255, 255, 255, 0.07); color: #ccc; border: 1px solid rgba(255, 255, 255, 0.12); }
 .sec:hover { background: rgba(255, 255, 255, 0.12); text-decoration: none; }
 .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.section { margin-bottom: 8px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.08); }
+.section-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; cursor: pointer; user-select: none;
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 0.15s;
+}
+.section-bar:hover { background: rgba(255, 255, 255, 0.08); }
+.section-title { font-size: 14px; font-weight: 600; color: #ccc; letter-spacing: 0.5px; }
+.chevron {
+  font-size: 10px; color: #666; transition: transform 0.2s;
+  transform: rotate(180deg);
+}
+.chevron.open { transform: rotate(0deg); }
+.section-body { border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .two-col { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 28px; }
 @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
 .footer { text-align: center; padding: 28px; font-size: 12px; color: #444; border-top: 1px solid rgba(255, 255, 255, 0.06); margin-top: 48px; }

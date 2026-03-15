@@ -88,16 +88,39 @@ func (r *Repo) Close() {
 }
 
 func (r *Repo) AllVesselsWithPositions(ctx context.Context) ([]*VesselPosition, error) {
-	query := `
+	return r.VesselsInBBox(ctx, nil)
+}
+
+// BBox holds bounding box coordinates for viewport filtering.
+type BBox struct {
+	South, West, North, East float64
+}
+
+func (r *Repo) VesselsInBBox(ctx context.Context, bbox *BBox) ([]*VesselPosition, error) {
+	var query string
+	var args []interface{}
+
+	if bbox != nil {
+		query = `
 		SELECT v.mmsi, v.name, v.vessel_type_name, v.call_sign, v.imo_number, v.draught,
 			ap.latitude, ap.longitude, ap.speed_over_ground, ap.course_over_ground,
-			ap.heading, ap.navigation_status_name, ap.timestamp, v.destination,
-			(
-				SELECT STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name)
-				FROM ais_positions p2
-				JOIN ais_sources s ON p2.source_id = s.id
-				WHERE p2.mmsi = v.mmsi
-			) AS sources
+			ap.heading, ap.navigation_status_name, ap.timestamp, v.destination
+		FROM vessels v
+		INNER JOIN LATERAL (
+			SELECT latitude, longitude, speed_over_ground, course_over_ground,
+				heading, navigation_status_name, timestamp
+			FROM ais_positions WHERE mmsi = v.mmsi ORDER BY timestamp DESC LIMIT 1
+		) ap ON true
+		WHERE ap.timestamp > NOW() - interval '7 days'
+		  AND ap.latitude BETWEEN $1 AND $2
+		  AND ap.longitude BETWEEN $3 AND $4
+		ORDER BY v.mmsi`
+		args = []interface{}{bbox.South, bbox.North, bbox.West, bbox.East}
+	} else {
+		query = `
+		SELECT v.mmsi, v.name, v.vessel_type_name, v.call_sign, v.imo_number, v.draught,
+			ap.latitude, ap.longitude, ap.speed_over_ground, ap.course_over_ground,
+			ap.heading, ap.navigation_status_name, ap.timestamp, v.destination
 		FROM vessels v
 		INNER JOIN LATERAL (
 			SELECT latitude, longitude, speed_over_ground, course_over_ground,
@@ -106,8 +129,9 @@ func (r *Repo) AllVesselsWithPositions(ctx context.Context) ([]*VesselPosition, 
 		) ap ON true
 		WHERE ap.timestamp > NOW() - interval '7 days'
 		ORDER BY v.mmsi`
+	}
 
-	rows, err := r.pool.Query(ctx, query)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +143,7 @@ func (r *Repo) AllVesselsWithPositions(ctx context.Context) ([]*VesselPosition, 
 		if err := rows.Scan(&vp.MMSI, &vp.Name, &vp.VesselTypeName, &vp.CallSign,
 			&vp.IMONumber, &vp.Draught, &vp.Latitude, &vp.Longitude,
 			&vp.SpeedOverGround, &vp.CourseOverGround, &vp.Heading,
-			&vp.NavigationStatusName, &vp.Timestamp, &vp.Destination,
-			&vp.Sources); err != nil {
+			&vp.NavigationStatusName, &vp.Timestamp, &vp.Destination); err != nil {
 			return nil, err
 		}
 		out = append(out, &vp)
@@ -243,6 +266,9 @@ type STSEvent struct {
 	LonB            *float64  `json:"lon_b,omitempty"`
 	Observations    *int      `json:"observations,omitempty"`
 	Confidence      string    `json:"confidence"`
+	Reviewed        bool      `json:"reviewed"`
+	Tag             *string   `json:"tag,omitempty"`
+	Notes           *string   `json:"notes,omitempty"`
 	DetectedAt      time.Time `json:"detected_at"`
 }
 
@@ -251,7 +277,7 @@ func (r *Repo) GetSTSEvents(ctx context.Context, hours int, limit int) ([]*STSEv
 		se.start_time, se.end_time, se.duration_minutes, se.min_distance_m,
 		se.avg_lat, se.avg_lon,
 		pa.latitude, pa.longitude, pb.latitude, pb.longitude,
-		se.observations, se.confidence, se.detected_at
+		se.observations, se.confidence, se.reviewed, se.tag, se.notes, se.detected_at
 		FROM sts_events se
 		LEFT JOIN LATERAL (
 			SELECT latitude, longitude FROM ais_positions
@@ -281,12 +307,19 @@ func (r *Repo) GetSTSEvents(ctx context.Context, hours int, limit int) ([]*STSEv
 			&e.MinDistanceM, &e.AvgLat, &e.AvgLon,
 			&e.LatA, &e.LonA, &e.LatB, &e.LonB,
 			&e.Observations,
-			&e.Confidence, &e.DetectedAt); err != nil {
+			&e.Confidence, &e.Reviewed, &e.Tag, &e.Notes, &e.DetectedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, &e)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repo) UpdateSTSEvent(ctx context.Context, id int64, confidence string, reviewed bool, tag *string, notes *string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE sts_events SET confidence = $2, reviewed = $3, tag = $4, notes = $5 WHERE id = $1`,
+		id, confidence, reviewed, tag, notes)
+	return err
 }
 
 // --- Vessel Search ---
@@ -551,4 +584,82 @@ func (r *Repo) PurgeOrphanVessels(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+// --- Spoofed AIS Detection ---
+
+type SpoofedVessel struct {
+	MMSI       int64   `json:"mmsi"`
+	Name       *string `json:"name,omitempty"`
+	VesselType *string `json:"vessel_type,omitempty"`
+	Reason     string  `json:"reason"`
+	LatFrom    float64 `json:"lat_from"`
+	LonFrom    float64 `json:"lon_from"`
+	LatTo      float64 `json:"lat_to"`
+	LonTo      float64 `json:"lon_to"`
+	SpeedKnots float64 `json:"speed_knots"`
+	DistanceKm float64 `json:"distance_km"`
+	TimeDeltaS int     `json:"time_delta_s"`
+	Timestamp1 string  `json:"timestamp_1"`
+	Timestamp2 string  `json:"timestamp_2"`
+}
+
+func (r *Repo) GetSpoofedVessels(ctx context.Context, hours int, limit int) ([]*SpoofedVessel, error) {
+	// Detect impossible speed (>60 knots between consecutive positions)
+	// and positions on land (lat/lon clearly invalid like lat>90 or on known land)
+	query := `
+		WITH consecutive AS (
+			SELECT mmsi, latitude AS lat1, longitude AS lon1, timestamp AS ts1,
+				LEAD(latitude) OVER w AS lat2,
+				LEAD(longitude) OVER w AS lon2,
+				LEAD(timestamp) OVER w AS ts2
+			FROM ais_positions
+			WHERE timestamp > NOW() - make_interval(hours => $1)
+			WINDOW w AS (PARTITION BY mmsi ORDER BY timestamp)
+		),
+		anomalies AS (
+			SELECT mmsi, lat1, lon1, lat2, lon2, ts1, ts2,
+				EXTRACT(EPOCH FROM ts2 - ts1) AS dt_s,
+				ST_DistanceSphere(
+					ST_MakePoint(lon1, lat1),
+					ST_MakePoint(lon2, lat2)
+				) / 1000.0 AS dist_km
+			FROM consecutive
+			WHERE lat2 IS NOT NULL
+				AND EXTRACT(EPOCH FROM ts2 - ts1) > 0
+				AND EXTRACT(EPOCH FROM ts2 - ts1) < 7200
+		)
+		SELECT a.mmsi, v.name, v.vessel_type_name,
+			CASE
+				WHEN (a.dist_km / (a.dt_s / 3600.0)) > 200 THEN 'teleport'
+				WHEN (a.dist_km / (a.dt_s / 3600.0)) > 60 THEN 'impossible_speed'
+				ELSE 'suspicious_speed'
+			END AS reason,
+			a.lat1, a.lon1, a.lat2, a.lon2,
+			(a.dist_km / (a.dt_s / 3600.0)) * 0.539957 AS speed_knots,
+			a.dist_km, a.dt_s::int, a.ts1::text, a.ts2::text
+		FROM anomalies a
+		JOIN vessels v ON v.mmsi = a.mmsi
+		WHERE (a.dist_km / (a.dt_s / 3600.0)) > 60
+		ORDER BY speed_knots DESC
+		LIMIT $2`
+
+	rows, err := r.pool.Query(ctx, query, hours, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*SpoofedVessel
+	for rows.Next() {
+		var s SpoofedVessel
+		if err := rows.Scan(&s.MMSI, &s.Name, &s.VesselType, &s.Reason,
+			&s.LatFrom, &s.LonFrom, &s.LatTo, &s.LonTo,
+			&s.SpeedKnots, &s.DistanceKm, &s.TimeDeltaS,
+			&s.Timestamp1, &s.Timestamp2); err != nil {
+			return nil, err
+		}
+		out = append(out, &s)
+	}
+	return out, rows.Err()
 }

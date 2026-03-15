@@ -106,6 +106,12 @@ th {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Vessel cluster icons */
+.vessel-cluster {
+  background: transparent !important;
+  border: none !important;
+}
+
 .sts-marker {
   animation: sts-pulse 2s infinite;
 }
