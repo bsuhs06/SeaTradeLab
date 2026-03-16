@@ -197,7 +197,7 @@ type TrailPoint struct {
 	Longitude float64 `json:"lng"`
 }
 
-func (r *Repo) TrailsInBBox(ctx context.Context, south, west, north, east float64, hours int) (map[int64][][2]float64, error) {
+func (r *Repo) TrailsInBBox(ctx context.Context, south, west, north, east float64, hours int) (map[int64][][3]float64, error) {
 	query := `WITH visible AS (
 		SELECT DISTINCT mmsi FROM ais_positions
 		WHERE timestamp > NOW() - make_interval(hours => $5)
@@ -205,7 +205,7 @@ func (r *Repo) TrailsInBBox(ctx context.Context, south, west, north, east float6
 		AND longitude BETWEEN $3 AND $4
 		LIMIT 500
 	)
-	SELECT p.mmsi, p.latitude, p.longitude
+	SELECT p.mmsi, p.latitude, p.longitude, EXTRACT(EPOCH FROM p.timestamp)::bigint
 	FROM ais_positions p
 	JOIN visible v ON p.mmsi = v.mmsi
 	WHERE p.timestamp > NOW() - make_interval(hours => $5)
@@ -217,14 +217,15 @@ func (r *Repo) TrailsInBBox(ctx context.Context, south, west, north, east float6
 	}
 	defer rows.Close()
 
-	trails := make(map[int64][][2]float64)
+	trails := make(map[int64][][3]float64)
 	for rows.Next() {
 		var mmsi int64
 		var lat, lng float64
-		if err := rows.Scan(&mmsi, &lat, &lng); err != nil {
+		var ts int64
+		if err := rows.Scan(&mmsi, &lat, &lng, &ts); err != nil {
 			return nil, err
 		}
-		trails[mmsi] = append(trails[mmsi], [2]float64{lng, lat})
+		trails[mmsi] = append(trails[mmsi], [3]float64{lng, lat, float64(ts)})
 	}
 	return trails, rows.Err()
 }
@@ -322,6 +323,12 @@ func (r *Repo) UpdateSTSEvent(ctx context.Context, id int64, confidence string, 
 	return err
 }
 
+func (r *Repo) CountSTSEvents(ctx context.Context, hours int) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM sts_events WHERE start_time > NOW() - make_interval(hours => $1)`, hours).Scan(&count)
+	return count, err
+}
+
 // --- Vessel Search ---
 
 func (r *Repo) SearchVessels(ctx context.Context, q string, limit int) ([]*VesselPosition, error) {
@@ -397,6 +404,17 @@ func (r *Repo) GetDarkVessels(ctx context.Context, minGapHours float64, limit in
 		out = append(out, &vp)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repo) CountDarkVessels(ctx context.Context, minGapHours float64) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM vessels v
+		INNER JOIN LATERAL (
+			SELECT timestamp FROM ais_positions WHERE mmsi = v.mmsi ORDER BY timestamp DESC LIMIT 1
+		) ap ON true
+		WHERE EXTRACT(EPOCH FROM (NOW() - ap.timestamp))/3600 >= $1`, minGapHours).Scan(&count)
+	return count, err
 }
 
 // --- Historical / Time Slider ---
@@ -507,6 +525,17 @@ func (r *Repo) GetPortVisits(ctx context.Context, hours int, nonRussianOnly bool
 		out = append(out, &pv)
 	}
 	return out, rows.Err()
+}
+
+func (r *Repo) CountPortVisits(ctx context.Context, hours int, nonRussianOnly bool) (int, error) {
+	var count int
+	var err error
+	if nonRussianOnly {
+		err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM russian_port_visits WHERE arrival_time > NOW() - make_interval(hours => $1) AND is_russian = false`, hours).Scan(&count)
+	} else {
+		err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM russian_port_visits WHERE arrival_time > NOW() - make_interval(hours => $1)`, hours).Scan(&count)
+	}
+	return count, err
 }
 
 // ========== Port Overrides ==========
@@ -662,4 +691,423 @@ func (r *Repo) GetSpoofedVessels(ctx context.Context, hours int, limit int) ([]*
 		out = append(out, &s)
 	}
 	return out, rows.Err()
+}
+
+// ========== Vessel Registry ==========
+
+type VesselRegistryEntry struct {
+	MMSI           int64     `json:"mmsi"`
+	IMONumber      *int64    `json:"imo_number,omitempty"`
+	Name           *string   `json:"name,omitempty"`
+	CallSign       *string   `json:"call_sign,omitempty"`
+	VesselType     *int      `json:"vessel_type,omitempty"`
+	VesselTypeName *string   `json:"vessel_type_name,omitempty"`
+	Draught        *float64  `json:"draught,omitempty"`
+	Destination    *string   `json:"destination,omitempty"`
+	FirstSeenAt    time.Time `json:"first_seen_at"`
+	LastSeenAt     time.Time `json:"last_seen_at"`
+	ChangeCount    int       `json:"change_count"`
+	Tags           *string   `json:"tags,omitempty"`
+}
+
+type VesselHistoryRecord struct {
+	ID        int64     `json:"id"`
+	MMSI      int64     `json:"mmsi"`
+	FieldName string    `json:"field_name"`
+	OldValue  *string   `json:"old_value,omitempty"`
+	NewValue  *string   `json:"new_value,omitempty"`
+	ChangedAt time.Time `json:"changed_at"`
+}
+
+type VesselNote struct {
+	ID        int       `json:"id"`
+	MMSI      int64     `json:"mmsi"`
+	Tag       string    `json:"tag"`
+	Note      *string   `json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (r *Repo) GetVesselRegistry(ctx context.Context, q string, tag string, limit int) ([]*VesselRegistryEntry, error) {
+	query := `
+		SELECT v.mmsi, v.imo_number, v.name, v.call_sign, v.vessel_type, v.vessel_type_name,
+			v.draught, v.destination, v.first_seen_at, v.last_seen_at,
+			COALESCE(hc.cnt, 0) AS change_count,
+			nt.tags
+		FROM vessels v
+		LEFT JOIN (
+			SELECT mmsi, COUNT(*) AS cnt FROM vessel_history GROUP BY mmsi
+		) hc ON hc.mmsi = v.mmsi
+		LEFT JOIN (
+			SELECT mmsi, STRING_AGG(tag, ',' ORDER BY tag) AS tags
+			FROM vessel_notes GROUP BY mmsi
+		) nt ON nt.mmsi = v.mmsi
+		WHERE 1=1`
+
+	var args []interface{}
+	argIdx := 1
+
+	if q != "" {
+		query += fmt.Sprintf(` AND (v.name ILIKE '%%' || $%d || '%%'
+			OR v.mmsi::text LIKE $%d || '%%'
+			OR v.call_sign ILIKE '%%' || $%d || '%%'
+			OR COALESCE(v.imo_number::text, '') = $%d)`, argIdx, argIdx, argIdx, argIdx)
+		args = append(args, q)
+		argIdx++
+	}
+
+	if tag != "" {
+		query += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM vessel_notes vn WHERE vn.mmsi = v.mmsi AND vn.tag = $%d)`, argIdx)
+		args = append(args, tag)
+		argIdx++
+	}
+
+	query += fmt.Sprintf(` ORDER BY v.last_seen_at DESC LIMIT $%d`, argIdx)
+	args = append(args, limit)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselRegistryEntry
+	for rows.Next() {
+		var e VesselRegistryEntry
+		if err := rows.Scan(&e.MMSI, &e.IMONumber, &e.Name, &e.CallSign,
+			&e.VesselType, &e.VesselTypeName, &e.Draught, &e.Destination,
+			&e.FirstSeenAt, &e.LastSeenAt, &e.ChangeCount, &e.Tags); err != nil {
+			return nil, err
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetVesselHistory(ctx context.Context, mmsi int64, limit int) ([]*VesselHistoryRecord, error) {
+	query := `SELECT id, mmsi, field_name, old_value, new_value, changed_at
+		FROM vessel_history WHERE mmsi = $1
+		ORDER BY changed_at DESC LIMIT $2`
+
+	rows, err := r.pool.Query(ctx, query, mmsi, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselHistoryRecord
+	for rows.Next() {
+		var h VesselHistoryRecord
+		if err := rows.Scan(&h.ID, &h.MMSI, &h.FieldName, &h.OldValue, &h.NewValue, &h.ChangedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &h)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetVesselNotes(ctx context.Context, mmsi int64) ([]*VesselNote, error) {
+	query := `SELECT id, mmsi, tag, note, created_at, updated_at
+		FROM vessel_notes WHERE mmsi = $1 ORDER BY created_at`
+
+	rows, err := r.pool.Query(ctx, query, mmsi)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselNote
+	for rows.Next() {
+		var n VesselNote
+		if err := rows.Scan(&n.ID, &n.MMSI, &n.Tag, &n.Note, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &n)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) UpsertVesselNote(ctx context.Context, mmsi int64, tag string, note *string) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO vessel_notes (mmsi, tag, note)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (mmsi, tag) DO UPDATE SET note = EXCLUDED.note, updated_at = NOW()`,
+		mmsi, tag, note)
+	return err
+}
+
+func (r *Repo) DeleteVesselNote(ctx context.Context, mmsi int64, tag string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM vessel_notes WHERE mmsi = $1 AND tag = $2`, mmsi, tag)
+	return err
+}
+
+func (r *Repo) GetAllTags(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT DISTINCT tag FROM vessel_notes ORDER BY tag`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
+func (r *Repo) GetRecentChanges(ctx context.Context, limit int) ([]*VesselHistoryRecord, error) {
+	query := `SELECT id, mmsi, field_name, old_value, new_value, changed_at
+		FROM vessel_history
+		ORDER BY changed_at DESC LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselHistoryRecord
+	for rows.Next() {
+		var h VesselHistoryRecord
+		if err := rows.Scan(&h.ID, &h.MMSI, &h.FieldName, &h.OldValue, &h.NewValue, &h.ChangedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &h)
+	}
+	return out, rows.Err()
+}
+
+// ========== Vessel Taint Tracking ==========
+
+type VesselPortCall struct {
+	ID            int64      `json:"id"`
+	MMSI          int64      `json:"mmsi"`
+	VesselName    *string    `json:"vessel_name,omitempty"`
+	VesselType    *string    `json:"vessel_type,omitempty"`
+	FlagCountry   *string    `json:"flag_country,omitempty"`
+	PortName      string     `json:"port_name"`
+	PortCountry   *string    `json:"port_country,omitempty"`
+	PortLat       *float64   `json:"port_lat,omitempty"`
+	PortLon       *float64   `json:"port_lon,omitempty"`
+	ArrivalTime   time.Time  `json:"arrival_time"`
+	DepartureTime *time.Time `json:"departure_time,omitempty"`
+	DurationHours *float64   `json:"duration_hours,omitempty"`
+	StillInPort   bool       `json:"still_in_port"`
+}
+
+type VesselEncounter struct {
+	ID              int64     `json:"id"`
+	MMSIA           int64     `json:"mmsi_a"`
+	MMSIB           int64     `json:"mmsi_b"`
+	NameA           *string   `json:"name_a,omitempty"`
+	NameB           *string   `json:"name_b,omitempty"`
+	TypeA           *string   `json:"type_a,omitempty"`
+	TypeB           *string   `json:"type_b,omitempty"`
+	StartTime       time.Time `json:"start_time"`
+	EndTime         time.Time `json:"end_time"`
+	DurationMinutes int       `json:"duration_minutes"`
+	MinDistanceM    *float64  `json:"min_distance_m,omitempty"`
+	AvgLat          *float64  `json:"avg_lat,omitempty"`
+	AvgLon          *float64  `json:"avg_lon,omitempty"`
+	MaxSogA         *float64  `json:"max_sog_a,omitempty"`
+	MaxSogB         *float64  `json:"max_sog_b,omitempty"`
+}
+
+type VesselTaintRecord struct {
+	ID            int64     `json:"id"`
+	MMSI          int64     `json:"mmsi"`
+	VesselName    *string   `json:"vessel_name,omitempty"`
+	TaintType     string    `json:"taint_type"`
+	Reason        *string   `json:"reason,omitempty"`
+	SourceMMSI    *int64    `json:"source_mmsi,omitempty"`
+	SourceName    *string   `json:"source_name,omitempty"`
+	SourceTaintID *int64    `json:"source_taint_id,omitempty"`
+	PortCallID    *int64    `json:"port_call_id,omitempty"`
+	EncounterID   *int64    `json:"encounter_id,omitempty"`
+	TaintedAt     time.Time `json:"tainted_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Active        bool      `json:"active"`
+}
+
+type TaintChainLink struct {
+	Taint     VesselTaintRecord `json:"taint"`
+	PortCall  *VesselPortCall   `json:"port_call,omitempty"`
+	Encounter *VesselEncounter  `json:"encounter,omitempty"`
+}
+
+func (r *Repo) GetTaintedVessels(ctx context.Context, limit int) ([]*VesselTaintRecord, error) {
+	query := `SELECT id, mmsi, vessel_name, taint_type, reason,
+		source_mmsi, source_name, source_taint_id, port_call_id, encounter_id,
+		tainted_at, expires_at, active
+		FROM vessel_taint WHERE active = true
+		ORDER BY tainted_at DESC LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselTaintRecord
+	for rows.Next() {
+		var t VesselTaintRecord
+		if err := rows.Scan(&t.ID, &t.MMSI, &t.VesselName, &t.TaintType, &t.Reason,
+			&t.SourceMMSI, &t.SourceName, &t.SourceTaintID, &t.PortCallID, &t.EncounterID,
+			&t.TaintedAt, &t.ExpiresAt, &t.Active); err != nil {
+			return nil, err
+		}
+		out = append(out, &t)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) CountTaintedVessels(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT mmsi) FROM vessel_taint WHERE active = true`).Scan(&count)
+	return count, err
+}
+
+func (r *Repo) GetVesselPortCalls(ctx context.Context, mmsi int64) ([]*VesselPortCall, error) {
+	query := `SELECT id, mmsi, vessel_name, vessel_type, flag_country,
+		port_name, port_country, port_lat, port_lon,
+		arrival_time, departure_time, duration_hours, still_in_port
+		FROM vessel_port_calls WHERE mmsi = $1
+		ORDER BY arrival_time DESC`
+
+	rows, err := r.pool.Query(ctx, query, mmsi)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselPortCall
+	for rows.Next() {
+		var pc VesselPortCall
+		if err := rows.Scan(&pc.ID, &pc.MMSI, &pc.VesselName, &pc.VesselType, &pc.FlagCountry,
+			&pc.PortName, &pc.PortCountry, &pc.PortLat, &pc.PortLon,
+			&pc.ArrivalTime, &pc.DepartureTime, &pc.DurationHours, &pc.StillInPort); err != nil {
+			return nil, err
+		}
+		out = append(out, &pc)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetVesselEncounters(ctx context.Context, mmsi int64) ([]*VesselEncounter, error) {
+	query := `SELECT id, mmsi_a, mmsi_b, name_a, name_b, type_a, type_b,
+		start_time, end_time, duration_minutes, min_distance_m,
+		avg_lat, avg_lon, max_sog_a, max_sog_b
+		FROM vessel_encounters
+		WHERE mmsi_a = $1 OR mmsi_b = $1
+		ORDER BY start_time DESC`
+
+	rows, err := r.pool.Query(ctx, query, mmsi)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselEncounter
+	for rows.Next() {
+		var e VesselEncounter
+		if err := rows.Scan(&e.ID, &e.MMSIA, &e.MMSIB, &e.NameA, &e.NameB,
+			&e.TypeA, &e.TypeB, &e.StartTime, &e.EndTime, &e.DurationMinutes,
+			&e.MinDistanceM, &e.AvgLat, &e.AvgLon, &e.MaxSogA, &e.MaxSogB); err != nil {
+			return nil, err
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetVesselTaint(ctx context.Context, mmsi int64) ([]*VesselTaintRecord, error) {
+	query := `SELECT id, mmsi, vessel_name, taint_type, reason,
+		source_mmsi, source_name, source_taint_id, port_call_id, encounter_id,
+		tainted_at, expires_at, active
+		FROM vessel_taint WHERE mmsi = $1
+		ORDER BY tainted_at DESC`
+
+	rows, err := r.pool.Query(ctx, query, mmsi)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*VesselTaintRecord
+	for rows.Next() {
+		var t VesselTaintRecord
+		if err := rows.Scan(&t.ID, &t.MMSI, &t.VesselName, &t.TaintType, &t.Reason,
+			&t.SourceMMSI, &t.SourceName, &t.SourceTaintID, &t.PortCallID, &t.EncounterID,
+			&t.TaintedAt, &t.ExpiresAt, &t.Active); err != nil {
+			return nil, err
+		}
+		out = append(out, &t)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetTaintChain(ctx context.Context, taintID int64) ([]*TaintChainLink, error) {
+	var chain []*TaintChainLink
+	currentID := taintID
+
+	for i := 0; i < 20; i++ { // max depth to prevent infinite loops
+		var t VesselTaintRecord
+		err := r.pool.QueryRow(ctx, `SELECT id, mmsi, vessel_name, taint_type, reason,
+			source_mmsi, source_name, source_taint_id, port_call_id, encounter_id,
+			tainted_at, expires_at, active
+			FROM vessel_taint WHERE id = $1`, currentID).Scan(
+			&t.ID, &t.MMSI, &t.VesselName, &t.TaintType, &t.Reason,
+			&t.SourceMMSI, &t.SourceName, &t.SourceTaintID, &t.PortCallID, &t.EncounterID,
+			&t.TaintedAt, &t.ExpiresAt, &t.Active)
+		if err != nil {
+			break
+		}
+
+		link := &TaintChainLink{Taint: t}
+
+		// Load associated port call
+		if t.PortCallID != nil {
+			var pc VesselPortCall
+			err := r.pool.QueryRow(ctx, `SELECT id, mmsi, vessel_name, vessel_type, flag_country,
+				port_name, port_country, port_lat, port_lon,
+				arrival_time, departure_time, duration_hours, still_in_port
+				FROM vessel_port_calls WHERE id = $1`, *t.PortCallID).Scan(
+				&pc.ID, &pc.MMSI, &pc.VesselName, &pc.VesselType, &pc.FlagCountry,
+				&pc.PortName, &pc.PortCountry, &pc.PortLat, &pc.PortLon,
+				&pc.ArrivalTime, &pc.DepartureTime, &pc.DurationHours, &pc.StillInPort)
+			if err == nil {
+				link.PortCall = &pc
+			}
+		}
+
+		// Load associated encounter
+		if t.EncounterID != nil {
+			var e VesselEncounter
+			err := r.pool.QueryRow(ctx, `SELECT id, mmsi_a, mmsi_b, name_a, name_b, type_a, type_b,
+				start_time, end_time, duration_minutes, min_distance_m,
+				avg_lat, avg_lon, max_sog_a, max_sog_b
+				FROM vessel_encounters WHERE id = $1`, *t.EncounterID).Scan(
+				&e.ID, &e.MMSIA, &e.MMSIB, &e.NameA, &e.NameB, &e.TypeA, &e.TypeB,
+				&e.StartTime, &e.EndTime, &e.DurationMinutes, &e.MinDistanceM,
+				&e.AvgLat, &e.AvgLon, &e.MaxSogA, &e.MaxSogB)
+			if err == nil {
+				link.Encounter = &e
+			}
+		}
+
+		chain = append(chain, link)
+
+		// Follow the chain
+		if t.SourceTaintID != nil {
+			currentID = *t.SourceTaintID
+		} else {
+			break
+		}
+	}
+
+	return chain, nil
 }

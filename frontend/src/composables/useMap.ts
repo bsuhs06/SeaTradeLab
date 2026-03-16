@@ -257,11 +257,82 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   }
 
   // --- Popup ---
+  function mmsiToFlag(mmsi: number): string {
+    const mid = String(mmsi).substring(0, 3)
+    const flags: Record<string, string> = {
+      '201':'Albania','202':'Andorra','203':'Austria','204':'Azores','205':'Belgium',
+      '206':'Belarus','207':'Bulgaria','208':'Vatican','209':'Cyprus','210':'Cyprus',
+      '211':'Germany','212':'Cyprus','213':'Georgia','214':'Moldova','215':'Malta',
+      '216':'Armenia','218':'Germany','219':'Denmark','220':'Denmark','224':'Spain',
+      '225':'Spain','226':'France','227':'France','228':'France','229':'Malta',
+      '230':'Finland','231':'Faroe Islands','232':'UK','233':'UK','234':'UK','235':'UK',
+      '236':'Gibraltar','237':'Greece','238':'Croatia','239':'Greece','240':'Greece',
+      '241':'Greece','242':'Morocco','243':'Hungary','244':'Netherlands','245':'Netherlands',
+      '246':'Netherlands','247':'Italy','248':'Malta','249':'Malta','250':'Ireland',
+      '251':'Iceland','252':'Liechtenstein','253':'Luxembourg','254':'Madeira',
+      '255':'Portugal','256':'Malta','257':'Norway','258':'Norway','259':'Norway',
+      '261':'Poland','262':'Montenegro','263':'Portugal','264':'Romania','265':'Sweden',
+      '266':'Sweden','267':'Slovakia','268':'San Marino','269':'Switzerland','270':'Czech Republic',
+      '271':'Turkey','272':'Ukraine','273':'Russia','274':'North Macedonia','275':'Latvia',
+      '276':'Estonia','277':'Lithuania','278':'Slovenia','279':'Serbia',
+      '301':'Anguilla','303':'Alaska','304':'Antigua','305':'Antigua','306':'Curacao',
+      '307':'Aruba','308':'Bahamas','309':'Bahamas','310':'Bermuda','311':'Bahamas',
+      '312':'Belize','314':'Barbados','316':'Canada','319':'Cayman Islands',
+      '321':'Costa Rica','323':'Cuba','325':'Dominica','327':'Dominican Republic',
+      '329':'Guadeloupe','330':'Grenada','331':'Greenland','332':'Guatemala',
+      '334':'Honduras','336':'Haiti','338':'USA','339':'Jamaica','341':'Saint Kitts',
+      '343':'Saint Lucia','345':'Mexico','347':'Martinique','348':'Montserrat',
+      '350':'Nicaragua','351':'Panama','352':'Panama','353':'Panama','354':'Panama',
+      '355':'Panama','356':'Panama','357':'Panama','358':'Puerto Rico',
+      '361':'Saint Pierre','362':'Trinidad','364':'Turks and Caicos',
+      '366':'USA','367':'USA','368':'USA','369':'USA','370':'Panama',
+      '371':'Panama','372':'Panama','373':'Panama','374':'Panama','375':'Saint Vincent',
+      '376':'Saint Vincent','377':'Saint Vincent',
+      '401':'Afghanistan','403':'Saudi Arabia','405':'Bangladesh','408':'Bahrain',
+      '410':'Bhutan','412':'China','413':'China','414':'China','416':'Taiwan',
+      '417':'Sri Lanka','419':'India','422':'Iran','423':'Azerbaijan','425':'Iraq',
+      '428':'Israel','431':'Japan','432':'Japan','434':'Turkmenistan','436':'Kazakhstan',
+      '437':'Uzbekistan','438':'Jordan','440':'South Korea','441':'South Korea',
+      '443':'Palestine','445':'DPRK','447':'Kuwait','450':'Lebanon','451':'Kyrgyzstan',
+      '453':'Macao','455':'Maldives','457':'Mongolia','459':'Nepal','461':'Oman',
+      '463':'Pakistan','466':'Qatar','468':'Syria','470':'UAE','471':'UAE',
+      '472':'Tajikistan','473':'Yemen','475':'Yemen','477':'Hong Kong',
+      '478':'Bosnia','501':'Antarctica','503':'Australia','506':'Myanmar',
+      '508':'Brunei','510':'Micronesia','511':'Palau','512':'New Zealand',
+      '514':'Cambodia','515':'Cambodia','516':'Christmas Island','518':'Cook Islands',
+      '520':'Fiji','523':'Cocos Islands','525':'Indonesia','529':'Kiribati',
+      '531':'Laos','533':'Malaysia','536':'N. Mariana Islands','538':'Marshall Islands',
+      '540':'New Caledonia','542':'Niue','544':'Nauru','546':'French Polynesia',
+      '548':'Philippines','553':'Papua New Guinea','555':'Pitcairn','557':'Solomon Islands',
+      '559':'American Samoa','561':'Samoa','563':'Singapore','564':'Singapore',
+      '565':'Singapore','566':'Singapore','567':'Thailand','570':'Tonga',
+      '572':'Tuvalu','574':'Vietnam','576':'Vanuatu','577':'Vanuatu',
+      '578':'Wallis and Futuna',
+      '601':'South Africa','603':'Angola','605':'Algeria','607':'Benin',
+      '608':'Botswana','609':'Burundi','610':'Cameroon','611':'Cape Verde',
+      '612':'Central African Republic','613':'Congo','614':'Ivory Coast',
+      '615':'Comoros','616':'DRC','617':'Djibouti','618':'Egypt',
+      '619':'Equatorial Guinea','620':'Eritrea','621':'Ethiopia',
+      '622':'Gabon','624':'Ghana','625':'Gambia','626':'Guinea-Bissau',
+      '627':'Guinea','629':'Kenya','630':'Lesotho','631':'Liberia',
+      '632':'Liberia','633':'Liberia','634':'Libya','635':'Mauritius',
+      '636':'Madagascar','637':'Mali','642':'Mozambique','644':'Mauritania',
+      '645':'Namibia','647':'Niger','649':'Nigeria','650':'Rwanda',
+      '654':'Sao Tome','655':'Senegal','656':'Seychelles','657':'Sierra Leone',
+      '659':'Sudan','660':'Eswatini','661':'Tanzania','662':'Chad',
+      '663':'Togo','664':'Tunisia','665':'Uganda','667':'Zambia','669':'Zimbabwe',
+      '670':'Gambia','671':'Tanzania','672':'Comoros',
+    }
+    return flags[mid] || ''
+  }
+
   function buildPopup(p: VesselProperties): string {
     const isR = p.is_russian
+    const flag = mmsiToFlag(p.mmsi)
     const name = (p.name || 'Unknown') + (isR ? ' [RUS]' : '')
     const nc = isR ? 'vessel-name russian' : 'vessel-name'
     let h = `<div class="vessel-popup"><div class="${nc}">${name}</div>`
+    if (flag) h += `<div class="vessel-flag">${flag}${isR ? ' \u{1F6A9}' : ''}</div>`
     h += `<div class="vessel-mmsi">MMSI: ${p.mmsi}</div><table>`
     if (p.vessel_type) h += `<tr><td>Type</td><td>${p.vessel_type}</td></tr>`
     if (p.destination) h += `<tr><td>Dest</td><td>${p.destination}</td></tr>`
@@ -365,7 +436,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   // --- Trails ---
   function scheduleTrails() {
     if (!map.value) return
-    if (!filters.value.showTrails || map.value.getZoom() < 10) {
+    if (!filters.value.showTrails || map.value.getZoom() < 7) {
       if (trailsLayer && map.value) {
         map.value.removeLayer(trailsLayer)
         trailsLayer = null
@@ -399,10 +470,44 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
 
       for (const [mmsiStr, coords] of Object.entries(trails)) {
         if (coords.length < 2) continue
-        const latlngs: [number, number][] = coords.map(([lng, lat]) => [lat, lng])
         const color = vesselColorMap.get(mmsiStr) ?? '#888'
         if (vesselColorMap.has(mmsiStr) && vesselColorMap.get(mmsiStr) === null) continue
-        L.polyline(latlngs, { color, weight: 2, opacity: 0.6, dashArray: '4,4', interactive: false }).addTo(trailsLayer!)
+
+        // Split into segments at time gaps (>1 hour)
+        const segments: [number, number][][] = [[[coords[0]![1], coords[0]![0]]]]
+        const gaps: { from: [number, number], to: [number, number], hours: number }[] = []
+        for (let i = 1; i < coords.length; i++) {
+          const dt = (coords[i]![2] - coords[i - 1]![2]) * 1000
+          if (dt > GAP_THRESHOLD_MS) {
+            const lastSeg = segments[segments.length - 1]!
+            const fromPt: [number, number] = lastSeg.length > 0 ? lastSeg[lastSeg.length - 1]! : [coords[i - 1]![1], coords[i - 1]![0]]
+            const toPt: [number, number] = [coords[i]![1], coords[i]![0]]
+            gaps.push({ from: fromPt, to: toPt, hours: Math.round(dt / 3600000) })
+            segments.push([])
+          }
+          segments[segments.length - 1]!.push([coords[i]![1], coords[i]![0]])
+        }
+        for (const seg of segments) {
+          if (seg.length >= 2) {
+            L.polyline(seg, { color, weight: 2, opacity: 0.6, dashArray: '4,4', interactive: false }).addTo(trailsLayer!)
+          }
+        }
+        // Draw gap connectors and AIS-off markers
+        for (const gap of gaps) {
+          L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.6, dashArray: '6,10', interactive: false }).addTo(trailsLayer!)
+          const offIcon = L.divIcon({
+            html: `<div class="ais-gap-marker ais-off">X</div>`,
+            className: '', iconSize: [14, 14], iconAnchor: [7, 7]
+          })
+          const onIcon = L.divIcon({
+            html: `<div class="ais-gap-marker ais-on">&#9650;</div>`,
+            className: '', iconSize: [14, 14], iconAnchor: [7, 7]
+          })
+          L.marker(gap.from, { icon: offIcon, interactive: true })
+            .addTo(trailsLayer!).bindTooltip(`AIS OFF — ~${gap.hours}h gap`, { direction: 'top', offset: [0, -12] })
+          L.marker(gap.to, { icon: onIcon, interactive: true })
+            .addTo(trailsLayer!).bindTooltip(`AIS ON`, { direction: 'top', offset: [0, -12] })
+        }
       }
     } catch (e) {
       console.error('Trail error:', e)
@@ -442,6 +547,8 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   }
 
   // --- Track loading ---
+  const GAP_THRESHOLD_MS = 60 * 60 * 1000 // 1 hour — break line if gap exceeds this
+
   async function loadTrack(mmsi: number) {
     clearTrack()
     if (!map.value) return
@@ -451,12 +558,53 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       const coords: [number, number][] = data.track.coordinates.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number])
       if (coords.length < 2) return
       activeTrack = L.layerGroup().addTo(map.value!)
-      L.polyline(coords, { color: '#ff0', weight: 3, opacity: 0.85, dashArray: '8,6' }).addTo(activeTrack)
+
+      // Split into segments at time gaps
+      const segments: [number, number][][] = [[coords[0]!]]
+      const gaps: { from: [number, number], to: [number, number], hours: number }[] = []
+      for (let i = 1; i < coords.length; i++) {
+        if (data.timestamps?.[i] && data.timestamps[i - 1]) {
+          const dt = new Date(data.timestamps[i]!).getTime() - new Date(data.timestamps[i - 1]!).getTime()
+          if (dt > GAP_THRESHOLD_MS) {
+            const lastSeg = segments[segments.length - 1]!
+            const fromPt = lastSeg.length > 0 ? lastSeg[lastSeg.length - 1]! : coords[i - 1]!
+            gaps.push({ from: fromPt, to: coords[i]!, hours: Math.round(dt / 3600000) })
+            segments.push([])
+          }
+        }
+        segments[segments.length - 1]!.push(coords[i]!)
+      }
+
+      // Draw each segment separately
+      const allCoords: [number, number][] = []
+      for (const seg of segments) {
+        if (seg.length >= 2) {
+          L.polyline(seg, { color: '#ff0', weight: 3, opacity: 0.85, dashArray: '8,6' }).addTo(activeTrack)
+        }
+        allCoords.push(...seg)
+      }
+
+      // Draw gap connectors and AIS-off/on markers
+      for (const gap of gaps) {
+        L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.7, dashArray: '6,10' }).addTo(activeTrack!)
+        const offIcon = L.divIcon({
+          html: `<div class="ais-gap-marker ais-off ais-gap-pulse">X</div><div class="ais-gap-label ais-off-label">AIS OFF ~${gap.hours}h</div>`,
+          className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+        })
+        const onIcon = L.divIcon({
+          html: `<div class="ais-gap-marker ais-on">&#9650;</div><div class="ais-gap-label ais-on-label">AIS ON</div>`,
+          className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+        })
+        L.marker(gap.from, { icon: offIcon, interactive: true, zIndexOffset: 1000 }).addTo(activeTrack!)
+        L.marker(gap.to, { icon: onIcon, interactive: true, zIndexOffset: 1000 }).addTo(activeTrack!)
+        allCoords.push(gap.from, gap.to)
+      }
+
       L.circleMarker(coords[0]!, { radius: 5, fillColor: '#0f0', fillOpacity: 1, color: '#fff', weight: 1 })
         .addTo(activeTrack).bindTooltip(`Start (${data.point_count} pts)`)
       L.circleMarker(coords[coords.length - 1]!, { radius: 5, fillColor: '#f00', fillOpacity: 1, color: '#fff', weight: 1 })
         .addTo(activeTrack).bindTooltip('Current')
-      map.value.fitBounds(L.polyline(coords).getBounds(), { padding: [40, 40] })
+      map.value.fitBounds(L.polyline(allCoords).getBounds(), { padding: [40, 40] })
     } catch (e) {
       console.error('Track error:', e)
     }

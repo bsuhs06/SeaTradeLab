@@ -12,6 +12,12 @@ import type {
   AnalyticsStatus,
   CollectorStatus,
   SpoofedResponse,
+  VesselRegistryResponse,
+  VesselRegistryDetail,
+  VesselChangesResponse,
+  TaintedVesselsResponse,
+  VesselTaintDetailResponse,
+  TaintChainResponse,
 } from '@/types/vessel'
 
 const BASE = '/api'
@@ -63,27 +69,27 @@ export const api = {
   getTrails: (south: number, west: number, north: number, east: number, hours = 24) =>
     get<TrailsMap>(`/trails?south=${south}&west=${west}&north=${north}&east=${east}&hours=${hours}`),
 
-  getSTSEvents: (hours = 168, limit = 500) =>
+  getSTSEvents: (hours = 168, limit = 100000) =>
     get<STSResponse>(`/sts-events?hours=${hours}&limit=${limit}`),
 
   updateSTSEvent: (id: number, data: { confidence: string; reviewed: boolean; tag?: string | null; notes?: string | null }) =>
     patch<{ status: string }>(`/sts-events/${id}`, data),
 
-  getSpoofedVessels: (hours = 24, limit = 200) =>
+  getSpoofedVessels: (hours = 24, limit = 100000) =>
     get<SpoofedResponse>(`/spoofed-vessels?hours=${hours}&limit=${limit}`),
 
-  searchVessels: (q: string, limit = 20) =>
+  searchVessels: (q: string, limit = 100) =>
     get<VesselFeatureCollection>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
   getDarkVessels: (minHours = 6) =>
-    get<DarkVesselResponse>(`/dark-vessels?min_hours=${minHours}`),
+    get<DarkVesselResponse>(`/dark-vessels?min_hours=${minHours}&limit=100000`),
 
   getHistorical: (time: string) =>
     get<VesselFeatureCollection>(`/historical?time=${encodeURIComponent(time)}`),
 
   getTimeRange: () => get<TimeRange>('/time-range'),
 
-  getPortVisits: (hours = 720, nonRussian = false, limit = 200) => {
+  getPortVisits: (hours = 720, nonRussian = false, limit = 100000) => {
     let url = `/port-visits?hours=${hours}&limit=${limit}`
     if (nonRussian) url += '&non_russian=true'
     return get<PortVisitResponse>(url)
@@ -112,4 +118,36 @@ export const api = {
 
   purgeOldData: (days: number) =>
     post<{ deleted: number }>('/purge', { days }),
+
+  getVesselRegistry: (q = '', tag = '', limit = 100000) => {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    if (tag) params.set('tag', tag)
+    params.set('limit', String(limit))
+    return get<VesselRegistryResponse>(`/vessel-registry?${params}`)
+  },
+
+  getVesselRegistryDetail: (mmsi: number) =>
+    get<VesselRegistryDetail>(`/vessel-registry/${mmsi}`),
+
+  getVesselChanges: (limit = 100000) =>
+    get<VesselChangesResponse>(`/vessel-changes?limit=${limit}`),
+
+  getVesselTags: () =>
+    get<{ tags: string[] }>('/vessel-tags'),
+
+  addVesselNote: (mmsi: number, tag: string, note?: string) =>
+    post<{ status: string }>(`/vessel-registry/${mmsi}/notes`, { tag, note }),
+
+  deleteVesselNote: (mmsi: number, tag: string) =>
+    del<{ status: string }>(`/vessel-registry/${mmsi}/notes?tag=${encodeURIComponent(tag)}`),
+
+  getTaintedVessels: (limit = 100000) =>
+    get<TaintedVesselsResponse>(`/tainted-vessels?limit=${limit}`),
+
+  getVesselTaintDetail: (mmsi: number) =>
+    get<VesselTaintDetailResponse>(`/vessel-taint/${mmsi}`),
+
+  getTaintChain: (taintId: number) =>
+    get<TaintChainResponse>(`/taint-chain/${taintId}`),
 }

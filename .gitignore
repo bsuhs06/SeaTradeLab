@@ -2,6 +2,9 @@
 .env
 *.env
 
+# Analytics (private)
+analytics/
+
 # Backups (large binary files)
 backups/
 

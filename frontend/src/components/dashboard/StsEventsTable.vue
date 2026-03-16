@@ -162,7 +162,10 @@ const filtered = computed(() => {
 })
 
 /* ---------- paginated ---------- */
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
+const totalFiltered = computed(() => filtered.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalFiltered.value / pageSize.value)))
+const rangeStart = computed(() => totalFiltered.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
+const rangeEnd = computed(() => Math.min(page.value * pageSize.value, totalFiltered.value))
 const paginated = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return filtered.value.slice(start, start + pageSize.value)
@@ -392,9 +395,9 @@ const TAG_OPTIONS = ['confirmed', 'suspicious', 'false-positive', 'anchorage', '
     </div>
 
     <!-- Pagination -->
-    <div class="pagination" v-if="totalPages > 1">
+    <div class="pagination" v-if="totalFiltered > 0">
       <button :disabled="page <= 1" @click="page--" class="pg-btn">‹ Prev</button>
-      <span class="pg-info">Page {{ page }} of {{ totalPages }}</span>
+      <span class="pg-info">{{ rangeStart.toLocaleString() }}–{{ rangeEnd.toLocaleString() }} of {{ totalFiltered.toLocaleString() }}</span>
       <button :disabled="page >= totalPages" @click="page++" class="pg-btn">Next ›</button>
       <select v-model.number="pageSize" class="finput pg-size" @change="page = 1">
         <option :value="10">10/page</option>

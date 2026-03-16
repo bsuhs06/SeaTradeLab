@@ -85,6 +85,13 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ports/override", h.portOverride)
 	mux.HandleFunc("/api/purge", h.purgeOldData)
 	mux.HandleFunc("/api/spoofed-vessels", h.spoofedVessels)
+	mux.HandleFunc("/api/vessel-registry", h.vesselRegistry)
+	mux.HandleFunc("/api/vessel-registry/", h.vesselRegistryDetail)
+	mux.HandleFunc("/api/vessel-changes", h.vesselChanges)
+	mux.HandleFunc("/api/vessel-tags", h.vesselTags)
+	mux.HandleFunc("/api/tainted-vessels", h.taintedVessels)
+	mux.HandleFunc("/api/vessel-taint/", h.vesselTaintDetail)
+	mux.HandleFunc("/api/taint-chain/", h.taintChain)
 }
 
 func (h *Handler) vessels(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +289,7 @@ func (h *Handler) trails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert int64 keys to strings for JSON
-	out := make(map[string][][2]float64, len(trails))
+	out := make(map[string][][3]float64, len(trails))
 	for mmsi, coords := range trails {
 		out[strconv.FormatInt(mmsi, 10)] = coords
 	}
@@ -324,9 +331,9 @@ func (h *Handler) stsEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	limit := 500
+	limit := 100
 	if lp := r.URL.Query().Get("limit"); lp != "" {
-		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 && parsed <= 5000 {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
@@ -338,11 +345,14 @@ func (h *Handler) stsEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	totalCount, _ := h.repo.CountSTSEvents(r.Context(), hours)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"events": events,
-		"count":  len(events),
-		"hours":  hours,
+		"events":      events,
+		"count":       len(events),
+		"total_count": totalCount,
+		"hours":       hours,
 	})
 }
 
@@ -407,9 +417,9 @@ func (h *Handler) searchVessels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 20
+	limit := 100
 	if lp := r.URL.Query().Get("limit"); lp != "" {
-		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 && parsed <= 100 {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
@@ -445,12 +455,21 @@ func (h *Handler) darkVessels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	vessels, err := h.repo.GetDarkVessels(r.Context(), minHours, 500)
+	limit := 100
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	vessels, err := h.repo.GetDarkVessels(r.Context(), minHours, limit)
 	if err != nil {
 		h.logger.Printf("Error fetching dark vessels: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+
+	totalCount, _ := h.repo.CountDarkVessels(r.Context(), minHours)
 
 	features := make([]map[string]interface{}, 0, len(vessels))
 	for _, v := range vessels {
@@ -483,9 +502,10 @@ func (h *Handler) darkVessels(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"type":     "FeatureCollection",
-		"features": features,
-		"count":    len(features),
+		"type":        "FeatureCollection",
+		"features":    features,
+		"count":       len(features),
+		"total_count": totalCount,
 	})
 }
 
@@ -566,9 +586,9 @@ func (h *Handler) portVisits(w http.ResponseWriter, r *http.Request) {
 
 	nonRussianOnly := r.URL.Query().Get("non_russian") == "true"
 
-	limit := 200
+	limit := 100
 	if lp := r.URL.Query().Get("limit"); lp != "" {
-		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 && parsed <= 1000 {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
@@ -580,11 +600,14 @@ func (h *Handler) portVisits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	totalCount, _ := h.repo.CountPortVisits(r.Context(), hours, nonRussianOnly)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"visits": visits,
-		"count":  len(visits),
-		"hours":  hours,
+		"visits":      visits,
+		"count":       len(visits),
+		"total_count": totalCount,
+		"hours":       hours,
 	})
 }
 
@@ -1676,9 +1699,9 @@ func (h *Handler) spoofedVessels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	limit := 200
+	limit := 100
 	if lp := r.URL.Query().Get("limit"); lp != "" {
-		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 && parsed <= 1000 {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
@@ -1695,5 +1718,295 @@ func (h *Handler) spoofedVessels(w http.ResponseWriter, r *http.Request) {
 		"vessels": vessels,
 		"count":   len(vessels),
 		"hours":   hours,
+	})
+}
+
+// ========== Vessel Registry ==========
+
+func (h *Handler) vesselRegistry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	q := r.URL.Query().Get("q")
+	tag := r.URL.Query().Get("tag")
+	limit := 100
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	entries, err := h.repo.GetVesselRegistry(r.Context(), q, tag, limit)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel registry: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"vessels": entries,
+		"count":   len(entries),
+	})
+}
+
+func (h *Handler) vesselRegistryDetail(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/vessel-registry/"), "/")
+	if len(parts) < 1 || parts[0] == "" {
+		http.Error(w, "MMSI required", http.StatusBadRequest)
+		return
+	}
+
+	mmsi, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid MMSI", http.StatusBadRequest)
+		return
+	}
+
+	// Sub-route: /api/vessel-registry/{mmsi}/notes
+	if len(parts) >= 2 && parts[1] == "notes" {
+		h.vesselNotes(w, r, mmsi)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vessel, err := h.repo.VesselByMMSI(r.Context(), mmsi)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel %d: %v", mmsi, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if vessel == nil {
+		http.Error(w, "Vessel not found", http.StatusNotFound)
+		return
+	}
+
+	history, err := h.repo.GetVesselHistory(r.Context(), mmsi, 100)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel history %d: %v", mmsi, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	notes, err := h.repo.GetVesselNotes(r.Context(), mmsi)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel notes %d: %v", mmsi, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"vessel":  vessel,
+		"history": history,
+		"notes":   notes,
+	})
+}
+
+func (h *Handler) vesselNotes(w http.ResponseWriter, r *http.Request, mmsi int64) {
+	switch r.Method {
+	case http.MethodPost:
+		var body struct {
+			Tag  string  `json:"tag"`
+			Note *string `json:"note"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if body.Tag == "" {
+			http.Error(w, "tag is required", http.StatusBadRequest)
+			return
+		}
+		if len(body.Tag) > 50 {
+			http.Error(w, "tag too long", http.StatusBadRequest)
+			return
+		}
+		if err := h.repo.UpsertVesselNote(r.Context(), mmsi, body.Tag, body.Note); err != nil {
+			h.logger.Printf("Error upserting vessel note: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	case http.MethodDelete:
+		tag := r.URL.Query().Get("tag")
+		if tag == "" {
+			http.Error(w, "tag query param required", http.StatusBadRequest)
+			return
+		}
+		if err := h.repo.DeleteVesselNote(r.Context(), mmsi, tag); err != nil {
+			h.logger.Printf("Error deleting vessel note: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) vesselChanges(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	limit := 100
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	changes, err := h.repo.GetRecentChanges(r.Context(), limit)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel changes: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"changes": changes,
+		"count":   len(changes),
+	})
+}
+
+func (h *Handler) vesselTags(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tags, err := h.repo.GetAllTags(r.Context())
+	if err != nil {
+		h.logger.Printf("Error fetching tags: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"tags": tags,
+	})
+}
+
+func (h *Handler) taintedVessels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	limit := 100000
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	tainted, err := h.repo.GetTaintedVessels(r.Context(), limit)
+	if err != nil {
+		h.logger.Printf("Error fetching tainted vessels: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	total, _ := h.repo.CountTaintedVessels(r.Context())
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"tainted":     tainted,
+		"count":       len(tainted),
+		"total_count": total,
+	})
+}
+
+func (h *Handler) vesselTaintDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse MMSI from /api/vessel-taint/{mmsi}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/vessel-taint/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "MMSI required", http.StatusBadRequest)
+		return
+	}
+	mmsi, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid MMSI", http.StatusBadRequest)
+		return
+	}
+
+	taint, err := h.repo.GetVesselTaint(r.Context(), mmsi)
+	if err != nil {
+		h.logger.Printf("Error fetching vessel taint: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	portCalls, err := h.repo.GetVesselPortCalls(r.Context(), mmsi)
+	if err != nil {
+		h.logger.Printf("Error fetching port calls: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	encounters, err := h.repo.GetVesselEncounters(r.Context(), mmsi)
+	if err != nil {
+		h.logger.Printf("Error fetching encounters: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"mmsi":       mmsi,
+		"taint":      taint,
+		"port_calls": portCalls,
+		"encounters": encounters,
+	})
+}
+
+func (h *Handler) taintChain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse taint ID from /api/taint-chain/{id}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/taint-chain/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "Taint ID required", http.StatusBadRequest)
+		return
+	}
+	taintID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid taint ID", http.StatusBadRequest)
+		return
+	}
+
+	chain, err := h.repo.GetTaintChain(r.Context(), taintID)
+	if err != nil {
+		h.logger.Printf("Error fetching taint chain: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"chain": chain,
+		"count": len(chain),
 	})
 }

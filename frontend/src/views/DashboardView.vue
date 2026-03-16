@@ -10,16 +10,19 @@ import DarkVesselsTable from '@/components/dashboard/DarkVesselsTable.vue'
 import AnalyticsPanel from '@/components/dashboard/AnalyticsPanel.vue'
 import CollectorPanel from '@/components/dashboard/CollectorPanel.vue'
 import PortManager from '@/components/dashboard/PortManager.vue'
+import VesselRegistry from '@/components/dashboard/VesselRegistry.vue'
+import TaintTracker from '@/components/dashboard/TaintTracker.vue'
 import FaqSection from '@/components/dashboard/FaqSection.vue'
 
 const stats = ref<Stats | null>(null)
 const stsEvents = ref<STSEvent[]>([])
 const darkVessels = ref<VesselFeature[]>([])
 const portVisits = ref<PortVisit[]>([])
-const portVisitCount = ref(0)
 
 const collapsed = reactive<Record<string, boolean>>({
   search: false,
+  registry: false,
+  taint: false,
   ports: false,
   sts: false,
   dark: false,
@@ -55,7 +58,6 @@ async function loadPortVisits(nonRussian = true) {
   try {
     const data = await api.getPortVisits(720, nonRussian)
     portVisits.value = data.visits || []
-    if (nonRussian) portVisitCount.value = data.count
   } catch { /* ignore */ }
 }
 
@@ -76,6 +78,8 @@ onMounted(refreshAll)
       <div class="sub">Real-time AIS monitoring, ship-to-ship transfer, and shadow fleet detection</div>
       <div class="nav">
         <router-link to="/map" class="pri">Open Live Map</router-link>
+        <a href="#registry" class="sec">Vessel Registry</a>
+        <a href="#taint" class="sec">Taint Tracker</a>
         <a href="#events" class="sec">STS Events</a>
         <a href="#port-visitors" class="sec">Port Visitors</a>
         <a href="#analytics" class="sec">Run Analytics</a>
@@ -90,7 +94,7 @@ onMounted(refreshAll)
         :stats="stats"
         :sts-count="stsEvents.length"
         :dark-count="darkVessels.length"
-        :port-visit-count="portVisitCount"
+        :port-visit-count="portVisits.length"
       />
 
       <div class="section">
@@ -100,6 +104,26 @@ onMounted(refreshAll)
         </div>
         <div v-show="!collapsed.search" class="section-body">
           <VesselSearch />
+        </div>
+      </div>
+
+      <div id="registry" class="section">
+        <div class="section-bar" @click="toggle('registry')">
+          <span class="section-title">Vessel Registry</span>
+          <span class="chevron" :class="{ open: !collapsed.registry }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.registry" class="section-body">
+          <VesselRegistry />
+        </div>
+      </div>
+
+      <div id="taint" class="section">
+        <div class="section-bar" @click="toggle('taint')">
+          <span class="section-title">Taint Tracker — Petroleum Tankers</span>
+          <span class="chevron" :class="{ open: !collapsed.taint }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.taint" class="section-body">
+          <TaintTracker />
         </div>
       </div>
 

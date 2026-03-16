@@ -83,6 +83,12 @@ th {
   color: #4fc3f7;
 }
 
+.vessel-flag {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 2px;
+}
+
 .vessel-popup .track-btn {
   display: inline-block;
   margin-top: 6px;

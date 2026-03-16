@@ -246,4 +246,40 @@ function exitFocus() {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 0.1; }
 }
+
+/* AIS gap markers */
+.ais-gap-marker {
+  width: 100%; height: 100%; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 9px; color: #fff;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  cursor: pointer;
+}
+.ais-gap-marker.ais-off {
+  background: #ff8800;
+}
+.ais-gap-marker.ais-on {
+  background: #00ccff;
+  font-size: 10px;
+}
+.ais-gap-pulse {
+  animation: ais-gap-blink 1.2s ease-in-out infinite;
+}
+@keyframes ais-gap-blink {
+  0%, 100% { box-shadow: 0 0 4px rgba(255,136,0,0.4); }
+  50% { box-shadow: 0 0 16px 4px rgba(255,136,0,0.8); }
+}
+.ais-gap-label {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font-size: 11px; font-weight: 700;
+  padding: 1px 6px; border-radius: 3px;
+  pointer-events: none;
+}
+.ais-off-label {
+  background: rgba(255,136,0,0.85); color: #fff;
+}
+.ais-on-label {
+  background: rgba(0,204,255,0.85); color: #fff;
+}
 </style>
