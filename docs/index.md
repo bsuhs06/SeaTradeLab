@@ -24,7 +24,7 @@ Track shadow fleet activity in the Baltic Sea using free AIS data. Detect ship-t
 | **Frontend** | Vue 3 + TypeScript SPA with Leaflet satellite map and analytics dashboard. |
 | **Analytics** | Python detection algorithms — STS, AIS gaps, port visits. Runs on-demand or scheduled. |
 | **Database** | PostgreSQL 16 + PostGIS for spatial queries. Shared by all services. |
-| **Data Source** | Finnish Digitraffic maritime API. Free, no signup, covers the Baltic Sea. |
+| **Data Sources** | Finnish Digitraffic maritime API. Free, no signup, covers the Baltic Sea. aisstream.io. Global live ais streaming. |
 
 ## Quick start
 
