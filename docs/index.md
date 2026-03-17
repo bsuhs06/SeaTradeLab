@@ -13,7 +13,7 @@ Track shadow fleet activity in the Baltic Sea using free AIS data. Detect ship-t
 
 **Port Visit Tracking** — Detects non-Russian vessels visiting Russian oil terminals (Primorsk, Ust-Luga, Vysotsk, etc.) using MMSI prefix flag identification.
 
-**Live Vessel Map** — Satellite view of ~18,000 vessels with track history, flag filtering, and real-time position updates from Baltic AIS sources.
+**Live Vessel Map** — Satellite view of ~58,000 vessels with track history, flag filtering, and real-time position updates from Baltic AIS sources.
 
 ## Architecture
 

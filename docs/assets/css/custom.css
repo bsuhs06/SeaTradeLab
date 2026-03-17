@@ -1,31 +1,5 @@
 /* SeaTradeLab — Custom overrides for minimal theme */
 
-/* Navigation bar */
-.site-nav {
-  margin: 1rem 0;
-  display: flex;
-  gap: 1.2rem;
-  flex-wrap: wrap;
-}
-.site-nav a {
-  color: #666;
-  font-size: 0.95rem;
-  font-weight: 500;
-  text-decoration: none;
-  padding: 0.3rem 0;
-  border-bottom: 2px solid transparent;
-  transition: color 0.2s, border-color 0.2s;
-}
-.site-nav a:hover {
-  color: #333;
-  border-bottom-color: #333;
-}
-.site-nav a.active {
-  color: #000;
-  border-bottom-color: #000;
-  font-weight: 600;
-}
-
 /* Post listing */
 .post-list {
   list-style: none;
