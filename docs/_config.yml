@@ -5,6 +5,7 @@ baseurl: "/seatradelab"
 permalink: /blog/:year/:month/:day/:title/
 
 theme: jekyll-theme-minimal
+future: true
 
 markdown: kramdown
 kramdown:

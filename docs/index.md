@@ -7,13 +7,13 @@ Track shadow fleet activity in the Baltic Sea using free AIS data. Detect ship-t
 
 ## What it detects
 
-**🔄 Ship-to-Ship Transfers** — KD-tree proximity search with geodesic distance, speed filtering, and port exclusion zones to find vessels rendezvousing at sea.
+**Ship-to-Ship Transfers** — KD-tree proximity search with geodesic distance, speed filtering, and port exclusion zones to find vessels rendezvousing at sea.
 
-**📡 AIS Gaps** — Vessels going dark — transponders turned off to avoid tracking. Flags gaps with last-known position to distinguish from coverage edges.
+**AIS Gaps** — Vessels going dark — transponders turned off to avoid tracking. Flags gaps with last-known position to distinguish from coverage edges.
 
-**🚢 Port Visit Tracking** — Detects non-Russian vessels visiting Russian oil terminals (Primorsk, Ust-Luga, Vysotsk, etc.) using MMSI prefix flag identification.
+**Port Visit Tracking** — Detects non-Russian vessels visiting Russian oil terminals (Primorsk, Ust-Luga, Vysotsk, etc.) using MMSI prefix flag identification.
 
-**🗺️ Live Vessel Map** — Satellite view of ~18,000 vessels with track history, flag filtering, and real-time position updates from Baltic AIS sources.
+**Live Vessel Map** — Satellite view of ~18,000 vessels with track history, flag filtering, and real-time position updates from Baltic AIS sources.
 
 ## Architecture
 
