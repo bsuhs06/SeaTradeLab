@@ -44,6 +44,9 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   let lastZoom = 7
   let isFetching = false
 
+  // Favorites tracking
+  const favoriteMMSIs = new Set<number>()
+
   // Icon cache: keyed by "color|size|headingBucket|stale|russian"
   const iconCache = new Map<string, L.DivIcon>()
   function clearIconCache() { iconCache.clear() }
@@ -82,6 +85,12 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
 
   function initMap() {
     if (!containerRef.value) return
+
+    // Load favorite MMSIs for popup star state
+    api.getFavorites().then(data => {
+      for (const f of data.favorites || []) favoriteMMSIs.add(f.mmsi)
+    }).catch(() => {})
+
     const m = L.map(containerRef.value, { center: [59.9, 24.9], zoom: 7, zoomControl: true, preferCanvas: true })
     satelliteTiles = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -97,6 +106,10 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     } else {
       osmTiles.addTo(m)
     }
+
+    // Gap markers render below vessel markers
+    m.createPane('gapPane')
+    m.getPane('gapPane')!.style.zIndex = '550'
 
     markersLayer = L.markerClusterGroup({
       maxClusterRadius: 40,
@@ -331,7 +344,9 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     const flag = mmsiToFlag(p.mmsi)
     const name = (p.name || 'Unknown') + (isR ? ' [RUS]' : '')
     const nc = isR ? 'vessel-name russian' : 'vessel-name'
-    let h = `<div class="vessel-popup"><div class="${nc}">${name}</div>`
+    const isFav = favoriteMMSIs.has(p.mmsi)
+    const starClass = isFav ? 'fav-star active' : 'fav-star'
+    let h = `<div class="vessel-popup"><div class="${nc}">${name} <span class="${starClass}" onclick="window.__toggleFavorite(${p.mmsi}, '${(p.name || '').replace(/'/g, "\\'")}', '${(p.vessel_type || '').replace(/'/g, "\\'")}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">★</span></div>`
     if (flag) h += `<div class="vessel-flag">${flag}${isR ? ' \u{1F6A9}' : ''}</div>`
     h += `<div class="vessel-mmsi">MMSI: ${p.mmsi}</div><table>`
     if (p.vessel_type) h += `<tr><td>Type</td><td>${p.vessel_type}</td></tr>`
@@ -455,11 +470,13 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       if (trailsLayer && map.value) map.value.removeLayer(trailsLayer)
       trailsLayer = L.layerGroup().addTo(map.value!)
 
-      // Build MMSI->color lookup once instead of O(N*M) linear scan
+      // Build MMSI->color and vessel info lookups
       const vesselColorMap = new Map<string, string | null>()
+      const vesselInfoMap = new Map<string, VesselProperties>()
       if (vesselData.value) {
         for (const f of vesselData.value.features) {
           const p = f.properties
+          vesselInfoMap.set(String(p.mmsi), p)
           if (!shouldShow(p)) {
             vesselColorMap.set(String(p.mmsi), null)
           } else {
@@ -493,20 +510,25 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
           }
         }
         // Draw gap connectors and AIS-off markers
+        const vInfo = vesselInfoMap.get(mmsiStr)
+        const vName = vInfo?.name || 'MMSI ' + mmsiStr
+        const vType = vInfo?.vessel_type || ''
         for (const gap of gaps) {
           L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.6, dashArray: '6,10', interactive: false }).addTo(trailsLayer!)
           const offIcon = L.divIcon({
             html: `<div class="ais-gap-marker ais-off">X</div>`,
-            className: '', iconSize: [14, 14], iconAnchor: [7, 7]
+            className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
           })
           const onIcon = L.divIcon({
             html: `<div class="ais-gap-marker ais-on">&#9650;</div>`,
-            className: '', iconSize: [14, 14], iconAnchor: [7, 7]
+            className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
           })
-          L.marker(gap.from, { icon: offIcon, interactive: true })
-            .addTo(trailsLayer!).bindTooltip(`AIS OFF — ~${gap.hours}h gap`, { direction: 'top', offset: [0, -12] })
-          L.marker(gap.to, { icon: onIcon, interactive: true })
-            .addTo(trailsLayer!).bindTooltip(`AIS ON`, { direction: 'top', offset: [0, -12] })
+          const offTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS OFF — ~${gap.hours}h gap`
+          const onTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS ON`
+          L.marker(gap.from, { icon: offIcon, interactive: true, pane: 'gapPane' })
+            .addTo(trailsLayer!).bindTooltip(offTip, { direction: 'top', offset: [0, -12] })
+          L.marker(gap.to, { icon: onIcon, interactive: true, pane: 'gapPane' })
+            .addTo(trailsLayer!).bindTooltip(onTip, { direction: 'top', offset: [0, -12] })
         }
       }
     } catch (e) {
@@ -585,18 +607,20 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       }
 
       // Draw gap connectors and AIS-off/on markers
+      const trackName = data.vessel?.name || 'MMSI ' + mmsi
+      const trackType = data.vessel?.vessel_type_name || ''
       for (const gap of gaps) {
         L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.7, dashArray: '6,10' }).addTo(activeTrack!)
         const offIcon = L.divIcon({
-          html: `<div class="ais-gap-marker ais-off ais-gap-pulse">X</div><div class="ais-gap-label ais-off-label">AIS OFF ~${gap.hours}h</div>`,
-          className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+          html: `<div class="ais-gap-marker ais-off ais-gap-pulse">X</div><div class="ais-gap-label ais-off-label">${trackName}<br>AIS OFF ~${gap.hours}h</div>`,
+          className: '', iconSize: [18, 18], iconAnchor: [-6, 9]
         })
         const onIcon = L.divIcon({
-          html: `<div class="ais-gap-marker ais-on">&#9650;</div><div class="ais-gap-label ais-on-label">AIS ON</div>`,
-          className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+          html: `<div class="ais-gap-marker ais-on">&#9650;</div><div class="ais-gap-label ais-on-label">${trackName}<br>AIS ON</div>`,
+          className: '', iconSize: [18, 18], iconAnchor: [-6, 9]
         })
-        L.marker(gap.from, { icon: offIcon, interactive: true, zIndexOffset: 1000 }).addTo(activeTrack!)
-        L.marker(gap.to, { icon: onIcon, interactive: true, zIndexOffset: 1000 }).addTo(activeTrack!)
+        L.marker(gap.from, { icon: offIcon, interactive: true, pane: 'gapPane' }).addTo(activeTrack!)
+        L.marker(gap.to, { icon: onIcon, interactive: true, pane: 'gapPane' }).addTo(activeTrack!)
         allCoords.push(gap.from, gap.to)
       }
 
@@ -621,6 +645,25 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   if (typeof window !== 'undefined') {
     ;(window as any).__loadTrack = loadTrack
     ;(window as any).__clearTrack = clearTrack
+    ;(window as any).__toggleFavorite = async (mmsi: number, name: string, type: string) => {
+      if (favoriteMMSIs.has(mmsi)) {
+        await api.removeFavorite(mmsi)
+        favoriteMMSIs.delete(mmsi)
+      } else {
+        await api.addFavorite(mmsi, name || undefined, type || undefined)
+        favoriteMMSIs.add(mmsi)
+      }
+      // Re-render popup for the marker
+      const marker = markersByMmsi.get(mmsi)
+      if (marker) {
+        const popup = marker.getPopup()
+        if (popup && popup.isOpen()) {
+          // Find the vessel properties
+          const feat = vesselData.value?.features.find(f => f.properties.mmsi === mmsi)
+          if (feat) popup.setContent(buildPopup(feat.properties))
+        }
+      }
+    }
   }
 
   // --- Data loading (viewport-aware) ---

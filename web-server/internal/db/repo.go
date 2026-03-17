@@ -1111,3 +1111,100 @@ func (r *Repo) GetTaintChain(ctx context.Context, taintID int64) ([]*TaintChainL
 
 	return chain, nil
 }
+
+// --- Vessel Favorites ---
+
+type VesselFavorite struct {
+	ID         int64     `json:"id"`
+	MMSI       int64     `json:"mmsi"`
+	VesselName *string   `json:"vessel_name,omitempty"`
+	VesselType *string   `json:"vessel_type,omitempty"`
+	Notes      *string   `json:"notes,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type FavoriteWithPosition struct {
+	VesselFavorite
+	Latitude        *float64   `json:"latitude,omitempty"`
+	Longitude       *float64   `json:"longitude,omitempty"`
+	SpeedOverGround *float64   `json:"speed_over_ground,omitempty"`
+	Heading         *int       `json:"heading,omitempty"`
+	Destination     *string    `json:"destination,omitempty"`
+	LastSeen        *time.Time `json:"last_seen,omitempty"`
+	FlagCountry     string     `json:"flag_country"`
+}
+
+func (r *Repo) GetFavorites(ctx context.Context) ([]*FavoriteWithPosition, error) {
+	query := `SELECT f.id, f.mmsi, f.vessel_name, f.vessel_type, f.notes, f.created_at,
+		ap.latitude, ap.longitude, ap.speed_over_ground, ap.heading, v.destination, ap.timestamp
+		FROM vessel_favorites f
+		LEFT JOIN vessels v ON f.mmsi = v.mmsi
+		LEFT JOIN LATERAL (
+			SELECT latitude, longitude, speed_over_ground, heading, timestamp
+			FROM ais_positions WHERE mmsi = f.mmsi ORDER BY timestamp DESC LIMIT 1
+		) ap ON true
+		ORDER BY f.created_at DESC`
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*FavoriteWithPosition
+	for rows.Next() {
+		var f FavoriteWithPosition
+		if err := rows.Scan(&f.ID, &f.MMSI, &f.VesselName, &f.VesselType, &f.Notes, &f.CreatedAt,
+			&f.Latitude, &f.Longitude, &f.SpeedOverGround, &f.Heading, &f.Destination, &f.LastSeen); err != nil {
+			return nil, err
+		}
+		out = append(out, &f)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) AddFavorite(ctx context.Context, mmsi int64, vesselName, vesselType, notes *string) (*VesselFavorite, error) {
+	var f VesselFavorite
+	err := r.pool.QueryRow(ctx, `INSERT INTO vessel_favorites (mmsi, vessel_name, vessel_type, notes)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (mmsi) DO UPDATE SET vessel_name = COALESCE(EXCLUDED.vessel_name, vessel_favorites.vessel_name),
+			vessel_type = COALESCE(EXCLUDED.vessel_type, vessel_favorites.vessel_type),
+			notes = COALESCE(EXCLUDED.notes, vessel_favorites.notes)
+		RETURNING id, mmsi, vessel_name, vessel_type, notes, created_at`,
+		mmsi, vesselName, vesselType, notes).Scan(&f.ID, &f.MMSI, &f.VesselName, &f.VesselType, &f.Notes, &f.CreatedAt)
+	return &f, err
+}
+
+func (r *Repo) RemoveFavorite(ctx context.Context, mmsi int64) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM vessel_favorites WHERE mmsi = $1`, mmsi)
+	return err
+}
+
+func (r *Repo) UpdateFavoriteNotes(ctx context.Context, mmsi int64, notes *string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE vessel_favorites SET notes = $2 WHERE mmsi = $1`, mmsi, notes)
+	return err
+}
+
+func (r *Repo) IsFavorite(ctx context.Context, mmsi int64) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM vessel_favorites WHERE mmsi = $1)`, mmsi).Scan(&exists)
+	return exists, err
+}
+
+func (r *Repo) GetFavoriteMMSIs(ctx context.Context) (map[int64]bool, error) {
+	rows, err := r.pool.Query(ctx, `SELECT mmsi FROM vessel_favorites`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make(map[int64]bool)
+	for rows.Next() {
+		var mmsi int64
+		if err := rows.Scan(&mmsi); err != nil {
+			return nil, err
+		}
+		out[mmsi] = true
+	}
+	return out, rows.Err()
+}

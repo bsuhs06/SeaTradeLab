@@ -92,6 +92,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/tainted-vessels", h.taintedVessels)
 	mux.HandleFunc("/api/vessel-taint/", h.vesselTaintDetail)
 	mux.HandleFunc("/api/taint-chain/", h.taintChain)
+	mux.HandleFunc("/api/favorites", h.favorites)
+	mux.HandleFunc("/api/favorites/", h.favoriteDetail)
 }
 
 func (h *Handler) vessels(w http.ResponseWriter, r *http.Request) {
@@ -2009,4 +2011,104 @@ func (h *Handler) taintChain(w http.ResponseWriter, r *http.Request) {
 		"chain": chain,
 		"count": len(chain),
 	})
+}
+
+func (h *Handler) favorites(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		favs, err := h.repo.GetFavorites(r.Context())
+		if err != nil {
+			h.logger.Printf("Error fetching favorites: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if favs == nil {
+			favs = []*db.FavoriteWithPosition{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"favorites": favs,
+			"count":     len(favs),
+		})
+
+	case http.MethodPost:
+		var body struct {
+			MMSI       int64   `json:"mmsi"`
+			VesselName *string `json:"vessel_name"`
+			VesselType *string `json:"vessel_type"`
+			Notes      *string `json:"notes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if body.MMSI == 0 {
+			http.Error(w, "mmsi is required", http.StatusBadRequest)
+			return
+		}
+		fav, err := h.repo.AddFavorite(r.Context(), body.MMSI, body.VesselName, body.VesselType, body.Notes)
+		if err != nil {
+			h.logger.Printf("Error adding favorite: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "favorite": fav})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) favoriteDetail(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/favorites/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "MMSI required", http.StatusBadRequest)
+		return
+	}
+	mmsi, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid MMSI", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		if err := h.repo.RemoveFavorite(r.Context(), mmsi); err != nil {
+			h.logger.Printf("Error removing favorite: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+
+	case http.MethodGet:
+		is, err := h.repo.IsFavorite(r.Context(), mmsi)
+		if err != nil {
+			h.logger.Printf("Error checking favorite: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"mmsi": mmsi, "is_favorite": is})
+
+	case http.MethodPatch:
+		var body struct {
+			Notes *string `json:"notes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if err := h.repo.UpdateFavoriteNotes(r.Context(), mmsi, body.Notes); err != nil {
+			h.logger.Printf("Error updating favorite notes: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }

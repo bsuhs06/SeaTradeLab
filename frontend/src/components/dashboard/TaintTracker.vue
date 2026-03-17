@@ -6,6 +6,7 @@ import type { VesselTaintRecord, VesselPortCall, VesselEncounter, TaintChainLink
 
 const tainted = ref<VesselTaintRecord[]>([])
 const loading = ref(false)
+const favMMSIs = ref(new Set<number>())
 
 /* ---------- detail panel ---------- */
 const detailMMSI = ref<number | null>(null)
@@ -31,8 +32,9 @@ const pageSize = ref(25)
 async function loadTainted() {
   loading.value = true
   try {
-    const data = await api.getTaintedVessels()
-    tainted.value = data.tainted || []
+    const [taintData, favData] = await Promise.all([api.getTaintedVessels(), api.getFavorites()])
+    tainted.value = taintData.tainted || []
+    favMMSIs.value = new Set((favData.favorites || []).map((f: any) => f.mmsi))
   } catch { /* ignore */ }
   loading.value = false
 }
@@ -130,6 +132,20 @@ function taintBadgeClass(type: string): string {
   return ''
 }
 
+async function toggleBookmark(t: VesselTaintRecord) {
+  if (favMMSIs.value.has(t.mmsi)) {
+    await api.removeFavorite(t.mmsi)
+    favMMSIs.value.delete(t.mmsi)
+  } else {
+    await api.addFavorite(t.mmsi, t.vessel_name, undefined)
+    favMMSIs.value.add(t.mmsi)
+  }
+}
+
+function viewOnMap(mmsi: number) {
+  window.location.href = `/map#search=${mmsi}`
+}
+
 onMounted(loadTainted)
 </script>
 
@@ -177,6 +193,7 @@ onMounted(loadTainted)
           <th>Tainted</th>
           <th>Expires</th>
           <th></th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -196,11 +213,15 @@ onMounted(loadTainted)
             <td>
               <button v-if="t.source_taint_id" class="btn-chain" @click.stop="showChain(t.id)" title="Trace taint chain">🔗</button>
             </td>
+            <td class="action-btns">
+              <button class="btn-map" @click.stop="viewOnMap(t.mmsi)" title="View on map">🗺️</button>
+              <button class="btn-fav" :class="{ active: favMMSIs.has(t.mmsi) }" @click.stop="toggleBookmark(t)" :title="favMMSIs.has(t.mmsi) ? 'Remove bookmark' : 'Bookmark vessel'">★</button>
+            </td>
           </tr>
 
           <!-- Detail panel -->
           <tr v-if="detailMMSI === t.mmsi" class="detail-row">
-            <td colspan="9">
+            <td colspan="10">
               <div v-if="detailLoading" class="loading">Loading details…</div>
               <div v-else class="detail-panel">
                 <!-- All taint records for this vessel -->
@@ -264,7 +285,7 @@ onMounted(loadTainted)
 
           <!-- Chain panel -->
           <tr v-if="chainTaintId === t.id" class="chain-row">
-            <td colspan="9">
+            <td colspan="10">
               <div v-if="chainLoading" class="loading">Loading taint chain…</div>
               <div v-else class="chain-panel">
                 <h4>Taint Chain ({{ chainLinks.length }} links)</h4>
@@ -334,6 +355,13 @@ onMounted(loadTainted)
 .btn-sm:hover { background: #333; }
 .btn-chain { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; }
 .btn-chain:hover { transform: scale(1.2); }
+
+.action-btns { white-space: nowrap; }
+.btn-map { background: none; border: 1px solid rgba(124,180,255,0.3); border-radius: 4px; padding: 1px 5px; cursor: pointer; font-size: 13px; margin-right: 3px; }
+.btn-map:hover { background: rgba(124,180,255,0.15); }
+.btn-fav { background: none; border: 1px solid rgba(255,215,0,0.3); border-radius: 4px; padding: 1px 5px; cursor: pointer; font-size: 14px; color: #555; }
+.btn-fav:hover { color: #ffd700; }
+.btn-fav.active { color: #ffd700; border-color: rgba(255,215,0,0.5); }
 
 .detail-row td { padding: 0.5rem 0.8rem; background: #141414; }
 .detail-panel { display: flex; flex-direction: column; gap: 1rem; }

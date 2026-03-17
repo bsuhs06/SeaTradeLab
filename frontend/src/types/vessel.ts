@@ -317,3 +317,26 @@ export interface TaintChainResponse {
   chain: TaintChainLink[]
   count: number
 }
+
+// ========== Vessel Favorites ==========
+
+export interface VesselFavorite {
+  id: number
+  mmsi: number
+  vessel_name?: string
+  vessel_type?: string
+  notes?: string
+  created_at: string
+  latitude?: number
+  longitude?: number
+  speed_over_ground?: number
+  heading?: number
+  destination?: string
+  last_seen?: string
+  flag_country?: string
+}
+
+export interface FavoritesResponse {
+  favorites: VesselFavorite[]
+  count: number
+}

@@ -5,7 +5,13 @@ import { formatAgo } from '@/composables/useVesselUtils'
 
 const query = ref('')
 const results = ref<any[]>([])
+const favMMSIs = ref(new Set<number>())
 let timer: ReturnType<typeof setTimeout> | null = null
+
+// Load favorites on mount
+api.getFavorites().then(data => {
+  for (const f of data.favorites || []) favMMSIs.value.add(f.mmsi)
+}).catch(() => {})
 
 function onInput() {
   if (query.value.trim().length < 2) { results.value = []; return }
@@ -24,6 +30,17 @@ function goToVessel(lat: number, lng: number, mmsi: number) {
 
 function clearResults() {
   setTimeout(() => { results.value = [] }, 200)
+}
+
+async function toggleFav(e: Event, mmsi: number, name?: string, type?: string) {
+  e.stopPropagation()
+  if (favMMSIs.value.has(mmsi)) {
+    await api.removeFavorite(mmsi)
+    favMMSIs.value.delete(mmsi)
+  } else {
+    await api.addFavorite(mmsi, name, type)
+    favMMSIs.value.add(mmsi)
+  }
 }
 </script>
 
@@ -55,7 +72,13 @@ function clearResults() {
             <template v-if="f.properties.vessel_type"> | {{ f.properties.vessel_type }}</template>
           </span>
         </div>
-        <span class="mt">{{ formatAgo(f.properties.timestamp) }}</span>
+        <div>{{ formatAgo(f.properties.timestamp) }}</div>
+        <span
+          class="fav-btn"
+          :class="{ active: favMMSIs.has(f.properties.mmsi) }"
+          @click="toggleFav($event, f.properties.mmsi, f.properties.name, f.properties.vessel_type)"
+          :title="favMMSIs.has(f.properties.mmsi) ? 'Remove from favorites' : 'Add to favorites'"
+        >★</span>
       </div>
     </div>
   </div>
@@ -100,4 +123,7 @@ function clearResults() {
 .mt { font-size: 11px; color: #888; }
 .ru { color: #ff6b6b; }
 .badge-rus { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; background: rgba(255, 59, 48, 0.2); color: #ff6b6b; margin-left: 4px; }
+.fav-btn { cursor: pointer; font-size: 18px; color: #555; margin-left: 8px; transition: color 0.15s; }
+.fav-btn:hover { color: #ffd700; }
+.fav-btn.active { color: #ffd700; }
 </style>

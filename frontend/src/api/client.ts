@@ -18,6 +18,7 @@ import type {
   TaintedVesselsResponse,
   VesselTaintDetailResponse,
   TaintChainResponse,
+  FavoritesResponse,
 } from '@/types/vessel'
 
 const BASE = '/api'
@@ -150,4 +151,19 @@ export const api = {
 
   getTaintChain: (taintId: number) =>
     get<TaintChainResponse>(`/taint-chain/${taintId}`),
+
+  getFavorites: () =>
+    get<FavoritesResponse>('/favorites'),
+
+  addFavorite: (mmsi: number, vesselName?: string, vesselType?: string, notes?: string) =>
+    post<{ status: string }>('/favorites', { mmsi, vessel_name: vesselName, vessel_type: vesselType, notes }),
+
+  removeFavorite: (mmsi: number) =>
+    del<{ status: string }>(`/favorites/${mmsi}`),
+
+  updateFavoriteNotes: (mmsi: number, notes: string) =>
+    patch<{ status: string }>(`/favorites/${mmsi}`, { notes }),
+
+  isFavorite: (mmsi: number) =>
+    get<{ mmsi: number; is_favorite: boolean }>(`/favorites/${mmsi}`),
 }

@@ -271,15 +271,16 @@ function exitFocus() {
   50% { box-shadow: 0 0 16px 4px rgba(255,136,0,0.8); }
 }
 .ais-gap-label {
-  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-  white-space: nowrap; font-size: 11px; font-weight: 700;
-  padding: 1px 6px; border-radius: 3px;
-  pointer-events: none;
+  position: absolute; top: -28px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 3px;
+  pointer-events: none; line-height: 1.3;
+  text-align: center;
 }
 .ais-off-label {
-  background: rgba(255,136,0,0.85); color: #fff;
+  background: rgba(255,136,0,0.9); color: #fff;
 }
 .ais-on-label {
-  background: rgba(0,204,255,0.85); color: #fff;
+  background: rgba(0,204,255,0.9); color: #fff;
 }
 </style>

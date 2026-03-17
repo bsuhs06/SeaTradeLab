@@ -12,6 +12,7 @@ import CollectorPanel from '@/components/dashboard/CollectorPanel.vue'
 import PortManager from '@/components/dashboard/PortManager.vue'
 import VesselRegistry from '@/components/dashboard/VesselRegistry.vue'
 import TaintTracker from '@/components/dashboard/TaintTracker.vue'
+import FavoritesPanel from '@/components/dashboard/FavoritesPanel.vue'
 import FaqSection from '@/components/dashboard/FaqSection.vue'
 
 const stats = ref<Stats | null>(null)
@@ -21,6 +22,7 @@ const portVisits = ref<PortVisit[]>([])
 
 const collapsed = reactive<Record<string, boolean>>({
   search: false,
+  favorites: false,
   registry: false,
   taint: false,
   ports: false,
@@ -78,6 +80,7 @@ onMounted(refreshAll)
       <div class="sub">Real-time AIS monitoring, ship-to-ship transfer, and shadow fleet detection</div>
       <div class="nav">
         <router-link to="/map" class="pri">Open Live Map</router-link>
+        <a href="#favorites" class="sec">Favorites</a>
         <a href="#registry" class="sec">Vessel Registry</a>
         <a href="#taint" class="sec">Taint Tracker</a>
         <a href="#events" class="sec">STS Events</a>
@@ -104,6 +107,16 @@ onMounted(refreshAll)
         </div>
         <div v-show="!collapsed.search" class="section-body">
           <VesselSearch />
+        </div>
+      </div>
+
+      <div id="favorites" class="section">
+        <div class="section-bar" @click="toggle('favorites')">
+          <span class="section-title">⭐ Bookmarked Vessels</span>
+          <span class="chevron" :class="{ open: !collapsed.favorites }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.favorites" class="section-body">
+          <FavoritesPanel />
         </div>
       </div>
 
