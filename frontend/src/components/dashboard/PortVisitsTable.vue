@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { formatTime, formatDuration } from '@/composables/useVesselUtils'
 import type { PortVisit } from '@/types/vessel'
 
@@ -8,8 +8,20 @@ const mode = ref<'foreign' | 'all'>('foreign')
 
 const emit = defineEmits<{ modeChange: [nonRussian: boolean] }>()
 
+const page = ref(1)
+const pageSize = ref(25)
+const total = computed(() => props.visits.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const rangeStart = computed(() => total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
+const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
+const paginated = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return props.visits.slice(start, start + pageSize.value)
+})
+
 function setMode(m: 'foreign' | 'all') {
   mode.value = m
+  page.value = 1
   emit('modeChange', m === 'foreign')
 }
 </script>
@@ -26,7 +38,7 @@ function setMode(m: 'foreign' | 'all') {
         <thead><tr><th>Vessel</th><th>Flag</th><th>Type</th><th>Port</th><th>Arrived</th><th>Duration</th><th>Status</th><th></th></tr></thead>
         <tbody>
           <tr v-if="!visits.length"><td colspan="8" class="empty">No Russian port visits detected yet</td></tr>
-          <tr v-for="v in visits" :key="v.mmsi + v.arrival_time">
+          <tr v-for="v in paginated" :key="v.mmsi + v.arrival_time">
             <td :class="v.is_russian ? 'russian' : 'foreign'">{{ v.vessel_name || v.mmsi }}</td>
             <td><span class="badge" :class="v.is_russian ? 'russian' : 'foreign'">{{ v.flag_country || 'Unknown' }}</span></td>
             <td>{{ v.vessel_type || '--' }}</td>
@@ -44,6 +56,17 @@ function setMode(m: 'foreign' | 'all') {
           </tr>
         </tbody>
       </table>
+    </div>
+    <div class="pagination" v-if="total > 0">
+      <button :disabled="page <= 1" @click="page--" class="pg-btn">‹ Prev</button>
+      <span class="pg-info">{{ rangeStart.toLocaleString() }}–{{ rangeEnd.toLocaleString() }} of {{ total.toLocaleString() }}</span>
+      <button :disabled="page >= totalPages" @click="page++" class="pg-btn">Next ›</button>
+      <select v-model.number="pageSize" class="pg-size" @change="page = 1">
+        <option :value="10">10/page</option>
+        <option :value="25">25/page</option>
+        <option :value="50">50/page</option>
+        <option :value="100">100/page</option>
+      </select>
     </div>
   </div>
 </template>
@@ -68,4 +91,10 @@ tr:hover { background: rgba(255, 255, 255, 0.02); }
 .badge.foreign { background: rgba(255, 159, 0, 0.2); color: #ffa726; }
 .badge.inport { background: rgba(76, 175, 80, 0.2); color: #66bb6a; }
 .link { color: #7cb4ff; cursor: pointer; text-decoration: none; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 18px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.pg-btn { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 5px; color: #ccc; font-size: 12px; padding: 5px 14px; cursor: pointer; }
+.pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.pg-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.pg-info { font-size: 12px; color: #888; }
+.pg-size { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 5px; color: #ddd; font-size: 11px; padding: 4px 8px; }
 </style>

@@ -62,6 +62,18 @@ function stopPlay() {
   playing.value = false
   if (playInterval) { clearInterval(playInterval); playInterval = null }
 }
+
+function jumpToTime(isoTime: string) {
+  const ms = new Date(isoTime).getTime()
+  if (timeMin && timeMax && ms >= timeMin && ms <= timeMax) {
+    sliderValue.value = Math.round((ms - timeMin) / (15 * 60000))
+  }
+  const d = new Date(ms)
+  timeLabel.value = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+}
+
+defineExpose({ jumpToTime })
 </script>
 
 <template>

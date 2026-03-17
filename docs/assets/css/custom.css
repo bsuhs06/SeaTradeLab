@@ -1,0 +1,155 @@
+/* SeaTradeLab — Custom overrides for minimal theme */
+
+/* Navigation bar */
+.site-nav {
+  margin: 1rem 0;
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+.site-nav a {
+  color: #666;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 0.3rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.site-nav a:hover {
+  color: #333;
+  border-bottom-color: #333;
+}
+.site-nav a.active {
+  color: #000;
+  border-bottom-color: #000;
+  font-weight: 600;
+}
+
+/* Post listing */
+.post-list {
+  list-style: none;
+  padding: 0;
+}
+.post-list li {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+.post-list li:last-child {
+  border-bottom: none;
+}
+
+/* Post metadata */
+.post-meta {
+  color: #999;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Tags */
+.post-tags {
+  margin: 0.5rem 0;
+}
+.post-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  background: #f0f0f0;
+  color: #666;
+  margin-right: 0.3rem;
+}
+
+/* Post navigation */
+.post-nav {
+  display: flex;
+  justify-content: space-between;
+  margin: 2rem 0 1rem;
+}
+
+/* Images in posts */
+article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid #e5e5e5;
+  margin: 1rem 0;
+}
+
+/* Video embeds */
+.video-embed {
+  position: relative;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  margin: 1.5rem 0;
+  border-radius: 4px;
+  border: 1px solid #e5e5e5;
+}
+.video-embed iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Dataset cards */
+.dataset-card {
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  padding: 1.25rem;
+  margin: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.dataset-info h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+}
+.dataset-info p {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0;
+}
+.dataset-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #999;
+}
+.dataset-meta span {
+  background: #f0f0f0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.btn-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.5rem 1rem;
+  background: #159957;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-download:hover {
+  background: #12844a;
+  color: #fff;
+  text-decoration: none;
+}
+
+@media (max-width: 480px) {
+  .site-nav { gap: 0.8rem; }
+  .dataset-card { flex-direction: column; align-items: flex-start; }
+}

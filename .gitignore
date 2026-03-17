@@ -1,9 +1,9 @@
-# AWS infrastructure (private deployment config, secrets, state)
-infra/
-
 # Environment files
 .env
 *.env
+
+# Analytics (private)
+analytics/
 
 # Backups (large binary files)
 backups/

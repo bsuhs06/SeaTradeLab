@@ -45,16 +45,25 @@ type AISStreamSource struct {
 
 // Bounding boxes for target regions: [[lat_min, lon_min], [lat_max, lon_max]]
 // AIS Stream format: [[lat_min, lon_min], [lat_max, lon_max]]
+// Global coverage excluding the Americas.
 var aisStreamBoundingBoxes = [][][2]float64{
-	// Baltic / Finland — overlap with Digitraffic for cross-validation
-	{{53.0, 9.0}, {66.0, 31.0}},
-	// Mediterranean
-	{{30.0, -6.0}, {46.0, 37.0}},
-	// Middle East / Arabian Sea / Persian Gulf
-	{{10.0, 32.0}, {32.0, 75.0}},
-	// Southeast Asia
-	{{-12.0, 95.0}, {25.0, 142.0}},
+	// Europe & Baltic
+	{{35.0, -12.0}, {72.0, 45.0}},
+	// Black Sea, Med East & Caspian
+	{{25.0, 25.0}, {47.0, 55.0}},
+	// Persian Gulf, Arabian Sea & Indian Ocean
+	{{-10.0, 35.0}, {30.0, 80.0}},
+	// East Asia & SE Asia
+	{{-12.0, 80.0}, {55.0, 145.0}},
+	// Oceania & SW Pacific
+	{{-50.0, 100.0}, {-12.0, 180.0}},
+	// West & Southern Africa
+	{{-40.0, -20.0}, {25.0, 35.0}},
 }
+
+// maxBufferSize caps the number of buffered messages to prevent
+// unbounded memory growth between Fetch() calls.
+const maxBufferSize = 150000
 
 // NewAISStreamSource creates a new AIS Stream WebSocket source.
 // The connection is not established until the collector calls Start
@@ -285,7 +294,9 @@ func (s *AISStreamSource) readMessages(ctx context.Context) {
 		}
 
 		s.mu.Lock()
-		s.buffer = append(s.buffer, aisData)
+		if len(s.buffer) < maxBufferSize {
+			s.buffer = append(s.buffer, aisData)
+		}
 		s.mu.Unlock()
 	}
 }

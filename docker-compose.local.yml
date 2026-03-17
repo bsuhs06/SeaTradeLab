@@ -11,7 +11,7 @@ services:
     container_name: ais-collector
     environment:
       DATABASE_URL: "postgres://${POSTGRES_USER:-ais}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ais_data}?sslmode=disable"
-      POLL_INTERVAL_MINUTES: "10"
+      POLL_INTERVAL_MINUTES: "2"
       ENABLE_DIGITRAFFIC: "true"
       ENABLE_MOCK_SOURCE: "false"
       AISSTREAM_API_KEY: "${AISSTREAM_API_KEY:-}"

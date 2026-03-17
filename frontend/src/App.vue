@@ -4,7 +4,10 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <template>
   <nav class="top-nav">
-    <RouterLink to="/" class="nav-brand">SeaTradeLab</RouterLink>
+    <RouterLink to="/" class="nav-brand">
+      <img src="/logo.png" alt="Sea-Trade Lab" class="nav-logo" />
+      SeaTradeLab
+    </RouterLink>
     <div class="nav-links">
       <RouterLink to="/">Dashboard</RouterLink>
       <RouterLink to="/map">Map</RouterLink>
@@ -24,10 +27,18 @@ import { RouterLink, RouterView } from 'vue-router'
 }
 
 .nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.2rem;
   font-weight: 700;
   color: #e0e0e0;
   text-decoration: none;
+}
+
+.nav-logo {
+  height: 36px;
+  mix-blend-mode: screen;
 }
 
 .nav-links a {

@@ -1,0 +1,33 @@
+---
+layout: default
+---
+<article>
+  <h1>{{ page.title }}</h1>
+  <p class="post-meta">
+    {{ page.date | date: "%B %d, %Y" }}
+    {% if page.author %} &middot; {{ page.author }}{% endif %}
+    {% if page.reading_time %} &middot; {{ page.reading_time }} min read{% endif %}
+  </p>
+  {% if page.tags.size > 0 %}
+  <p class="post-tags">
+    {% for tag in page.tags %}
+    <span class="post-tag">{{ tag }}</span>
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  {{ content }}
+
+  <hr>
+
+  <nav class="post-nav">
+    {% if page.previous.url %}
+    <a href="{{ page.previous.url | relative_url }}">&larr; {{ page.previous.title }}</a>
+    {% endif %}
+    {% if page.next.url %}
+    <a href="{{ page.next.url | relative_url }}">{{ page.next.title }} &rarr;</a>
+    {% endif %}
+  </nav>
+
+  <p><a href="{{ '/blog' | relative_url }}">&larr; All posts</a></p>
+</article>

@@ -1,8 +1,20 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue'
 import { formatAgo } from '@/composables/useVesselUtils'
 import type { VesselFeature } from '@/types/vessel'
 
-defineProps<{ vessels: VesselFeature[] }>()
+const props = defineProps<{ vessels: VesselFeature[] }>()
+
+const page = ref(1)
+const pageSize = ref(25)
+const total = computed(() => props.vessels.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const rangeStart = computed(() => total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
+const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
+const paginated = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return props.vessels.slice(start, start + pageSize.value)
+})
 </script>
 
 <template>
@@ -13,7 +25,7 @@ defineProps<{ vessels: VesselFeature[] }>()
         <thead><tr><th>Vessel</th><th>Last Seen</th><th>Gap</th></tr></thead>
         <tbody>
           <tr v-if="!vessels.length"><td colspan="3" class="empty">No dark vessels currently</td></tr>
-          <tr v-for="f in vessels.slice(0, 50)" :key="f.properties.mmsi">
+          <tr v-for="f in paginated" :key="f.properties.mmsi">
             <td :class="{ russian: f.properties.is_russian }">
               {{ f.properties.name || f.properties.mmsi }}
               <span v-if="f.properties.is_russian"> [RUS]</span>
@@ -23,6 +35,17 @@ defineProps<{ vessels: VesselFeature[] }>()
           </tr>
         </tbody>
       </table>
+    </div>
+    <div class="pagination" v-if="total > 0">
+      <button :disabled="page <= 1" @click="page--" class="pg-btn">‹ Prev</button>
+      <span class="pg-info">{{ rangeStart.toLocaleString() }}–{{ rangeEnd.toLocaleString() }} of {{ total.toLocaleString() }}</span>
+      <button :disabled="page >= totalPages" @click="page++" class="pg-btn">Next ›</button>
+      <select v-model.number="pageSize" class="pg-size" @change="page = 1">
+        <option :value="10">10/page</option>
+        <option :value="25">25/page</option>
+        <option :value="50">50/page</option>
+        <option :value="100">100/page</option>
+      </select>
     </div>
   </div>
 </template>
@@ -37,4 +60,10 @@ td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid rgba(255, 255,
 tr:hover { background: rgba(255, 255, 255, 0.02); }
 .empty { text-align: center; padding: 32px; color: #555; font-size: 13px; }
 .russian { color: #ff6b6b; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 18px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.pg-btn { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 5px; color: #ccc; font-size: 12px; padding: 5px 14px; cursor: pointer; }
+.pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.pg-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.pg-info { font-size: 12px; color: #888; }
+.pg-size { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 5px; color: #ddd; font-size: 11px; padding: 4px 8px; }
 </style>
