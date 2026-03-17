@@ -1,6 +1,6 @@
 title: SeaTradeLab
 description: "Open-source maritime intelligence. Track shadow fleet activity using free AIS data."
-url: "https://bsuhs.github.io"
+url: "https://bsuhs06.github.io"
 baseurl: "/seatradelab"
 permalink: /blog/:year/:month/:day/:title/
 
