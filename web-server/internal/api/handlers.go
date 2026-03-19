@@ -94,6 +94,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/taint-chain/", h.taintChain)
 	mux.HandleFunc("/api/favorites", h.favorites)
 	mux.HandleFunc("/api/favorites/", h.favoriteDetail)
+	mux.HandleFunc("/api/destination-anomalies", h.destinationAnomalies)
+	mux.HandleFunc("/api/destination-changes/", h.destinationChanges)
 }
 
 func (h *Handler) vessels(w http.ResponseWriter, r *http.Request) {
@@ -2111,4 +2113,91 @@ func (h *Handler) favoriteDetail(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// ========== Destination Anomalies ==========
+
+func (h *Handler) destinationAnomalies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	limit := 100000
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 && parsed <= 100000 {
+			limit = parsed
+		}
+	}
+
+	anomalies, err := h.repo.GetDestinationAnomalies(r.Context(), limit)
+	if err != nil {
+		h.logger.Printf("Error fetching destination anomalies: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Also get recent destination changes (last 7 days)
+	hours := 168
+	if hp := r.URL.Query().Get("hours"); hp != "" {
+		if parsed, err := strconv.Atoi(hp); err == nil && parsed > 0 && parsed <= 720 {
+			hours = parsed
+		}
+	}
+
+	changes, err := h.repo.GetRecentDestinationChanges(r.Context(), hours, 100000)
+	if err != nil {
+		h.logger.Printf("Error fetching destination changes: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"anomalies":     anomalies,
+		"changes":       changes,
+		"anomaly_count": len(anomalies),
+		"change_count":  len(changes),
+		"hours":         hours,
+	})
+}
+
+func (h *Handler) destinationChanges(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract MMSI from path: /api/destination-changes/{mmsi}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/destination-changes/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, "MMSI required", http.StatusBadRequest)
+		return
+	}
+	mmsi, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid MMSI", http.StatusBadRequest)
+		return
+	}
+
+	limit := 100
+	if lp := r.URL.Query().Get("limit"); lp != "" {
+		if parsed, err := strconv.Atoi(lp); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	changes, err := h.repo.GetDestinationChanges(r.Context(), mmsi, limit)
+	if err != nil {
+		h.logger.Printf("Error fetching destination changes for %d: %v", mmsi, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"changes": changes,
+		"count":   len(changes),
+		"mmsi":    mmsi,
+	})
 }

@@ -19,6 +19,8 @@ import type {
   VesselTaintDetailResponse,
   TaintChainResponse,
   FavoritesResponse,
+  DestinationAnomaliesResponse,
+  DestinationChangesResponse,
 } from '@/types/vessel'
 
 const BASE = '/api'
@@ -166,4 +168,10 @@ export const api = {
 
   isFavorite: (mmsi: number) =>
     get<{ mmsi: number; is_favorite: boolean }>(`/favorites/${mmsi}`),
+
+  getDestinationAnomalies: (hours = 168, limit = 100000) =>
+    get<DestinationAnomaliesResponse>(`/destination-anomalies?hours=${hours}&limit=${limit}`),
+
+  getDestinationChanges: (mmsi: number, limit = 100) =>
+    get<DestinationChangesResponse>(`/destination-changes/${mmsi}?limit=${limit}`),
 }

@@ -1208,3 +1208,162 @@ func (r *Repo) GetFavoriteMMSIs(ctx context.Context) (map[int64]bool, error) {
 	}
 	return out, rows.Err()
 }
+
+// ========== Destination Anomalies ==========
+
+type DestinationAnomaly struct {
+	MMSI           int64     `json:"mmsi"`
+	Name           *string   `json:"name,omitempty"`
+	VesselTypeName *string   `json:"vessel_type_name,omitempty"`
+	Destination    string    `json:"destination"`
+	Reason         string    `json:"reason"`
+	LastSeenAt     time.Time `json:"last_seen_at"`
+	ChangeCount    int       `json:"change_count"`
+	Latitude       float64   `json:"latitude"`
+	Longitude      float64   `json:"longitude"`
+}
+
+type DestinationChange struct {
+	ID        int64     `json:"id"`
+	MMSI      int64     `json:"mmsi"`
+	Name      *string   `json:"name,omitempty"`
+	OldValue  *string   `json:"old_value,omitempty"`
+	NewValue  *string   `json:"new_value,omitempty"`
+	ChangedAt time.Time `json:"changed_at"`
+}
+
+func (r *Repo) GetDestinationAnomalies(ctx context.Context, limit int) ([]*DestinationAnomaly, error) {
+	// Flag destinations that look like messages rather than port names:
+	// 1. Contains known message/protest keywords
+	// 2. Contains crew/personnel words (not port names)
+	// 3. Long multi-word (>30 chars, 3+ words)
+	// 4. 3+ words (most real ports are 1-2 words)
+	// 5. Frequent destination changes
+	query := `
+		WITH dest_changes AS (
+			SELECT mmsi, COUNT(*) AS change_count
+			FROM vessel_history
+			WHERE field_name = 'destination'
+			  AND changed_at > NOW() - interval '30 days'
+			GROUP BY mmsi
+		)
+		SELECT v.mmsi, v.name, v.vessel_type_name, v.destination,
+			CASE
+				WHEN v.destination ~* '\m(SOS|HELP|MAYDAY|ATTACK|CONFLICT|WAR|PROTEST|SANCTION|MILITARY|IRAN|HOUTHI|MISSILE|STRIKE|SEIZED|HIJACK|PIRAT|EMBARGO|THREAT|WEAPON|BOMB|NOT INVOLVED|NO PART|DO NOT)\M'
+					THEN 'message_keywords'
+				WHEN v.destination ~* '\m(CREW|OWNER|MASTER|CAPTAIN|SAILING|ANCHOR|DRIFTING|REPAIR|BROKEN|UNSAFE|DISTRESS|OVERDUE|MISSING|ABANDONED|REFUGEE|ILLEGAL|POLICE|COAST GUARD|NAVY|CHINESE|INDIAN|IRANIAN|RUSSIAN|KOREAN|FILIPINO|TURKISH|SYRIAN|YEMENI|SOMALI|LIBYAN|NORTH KOREAN|VENEZUELAN)\M'
+					THEN 'message_keywords'
+				WHEN LENGTH(v.destination) > 30
+					AND array_length(string_to_array(TRIM(v.destination), ' '), 1) >= 3
+					THEN 'long_multi_word'
+				WHEN array_length(string_to_array(TRIM(v.destination), ' '), 1) >= 3
+					THEN 'multi_word_message'
+				WHEN COALESCE(dc.change_count, 0) >= 5
+					THEN 'frequent_changes'
+				ELSE 'unusual_format'
+			END AS reason,
+			v.last_seen_at,
+			COALESCE(dc.change_count, 0) AS change_count,
+			COALESCE(lp.latitude, 0) AS latitude,
+			COALESCE(lp.longitude, 0) AS longitude
+		FROM vessels v
+		LEFT JOIN dest_changes dc ON dc.mmsi = v.mmsi
+		LEFT JOIN LATERAL (
+			SELECT latitude, longitude FROM ais_positions
+			WHERE mmsi = v.mmsi ORDER BY timestamp DESC LIMIT 1
+		) lp ON true
+		WHERE v.destination IS NOT NULL
+		  AND v.destination <> ''
+		  AND v.last_seen_at > NOW() - interval '30 days'
+		  AND (
+			-- Contains protest/message keywords
+			v.destination ~* '\m(SOS|HELP|MAYDAY|ATTACK|CONFLICT|WAR|PROTEST|SANCTION|MILITARY|IRAN|HOUTHI|MISSILE|STRIKE|SEIZED|HIJACK|PIRAT|EMBARGO|THREAT|WEAPON|BOMB|NOT INVOLVED|NO PART|DO NOT)\M'
+			-- Contains crew/personnel/status words
+			OR v.destination ~* '\m(CREW|OWNER|MASTER|CAPTAIN|SAILING|ANCHOR|DRIFTING|REPAIR|BROKEN|UNSAFE|DISTRESS|OVERDUE|MISSING|ABANDONED|REFUGEE|ILLEGAL|POLICE|COAST GUARD|NAVY|CHINESE|INDIAN|IRANIAN|RUSSIAN|KOREAN|FILIPINO|TURKISH|SYRIAN|YEMENI|SOMALI|LIBYAN|NORTH KOREAN|VENEZUELAN)\M'
+			-- Long multi-word string (likely a message)
+			OR (LENGTH(v.destination) > 30
+				AND array_length(string_to_array(TRIM(v.destination), ' '), 1) >= 3)
+			-- 3+ words in destination (unusual for port names)
+			OR array_length(string_to_array(TRIM(v.destination), ' '), 1) >= 3
+			-- Frequent destination changes
+			OR COALESCE(dc.change_count, 0) >= 5
+		  )
+		ORDER BY
+			CASE
+				WHEN v.destination ~* '\m(SOS|HELP|MAYDAY|ATTACK|CONFLICT|WAR|PROTEST|SANCTION|MILITARY|IRAN|HOUTHI|MISSILE|STRIKE|SEIZED|HIJACK|PIRAT|EMBARGO|THREAT|WEAPON|BOMB|NOT INVOLVED|NO PART|DO NOT)\M' THEN 0
+				WHEN v.destination ~* '\m(CREW|OWNER|MASTER|CAPTAIN|SAILING|ANCHOR|DRIFTING|REPAIR|BROKEN|UNSAFE|DISTRESS|OVERDUE|MISSING|ABANDONED|REFUGEE|ILLEGAL|POLICE|COAST GUARD|NAVY|CHINESE|INDIAN|IRANIAN|RUSSIAN|KOREAN|FILIPINO|TURKISH|SYRIAN|YEMENI|SOMALI|LIBYAN|NORTH KOREAN|VENEZUELAN)\M' THEN 0
+				ELSE 1
+			END,
+			COALESCE(dc.change_count, 0) DESC,
+			v.last_seen_at DESC
+		LIMIT $1`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*DestinationAnomaly
+	for rows.Next() {
+		var a DestinationAnomaly
+		if err := rows.Scan(&a.MMSI, &a.Name, &a.VesselTypeName, &a.Destination,
+			&a.Reason, &a.LastSeenAt, &a.ChangeCount, &a.Latitude, &a.Longitude); err != nil {
+			return nil, err
+		}
+		out = append(out, &a)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetDestinationChanges(ctx context.Context, mmsi int64, limit int) ([]*DestinationChange, error) {
+	query := `SELECT vh.id, vh.mmsi, v.name, vh.old_value, vh.new_value, vh.changed_at
+		FROM vessel_history vh
+		JOIN vessels v ON v.mmsi = vh.mmsi
+		WHERE vh.field_name = 'destination'
+		  AND vh.mmsi = $1
+		ORDER BY vh.changed_at DESC
+		LIMIT $2`
+
+	rows, err := r.pool.Query(ctx, query, mmsi, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*DestinationChange
+	for rows.Next() {
+		var c DestinationChange
+		if err := rows.Scan(&c.ID, &c.MMSI, &c.Name, &c.OldValue, &c.NewValue, &c.ChangedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
+
+func (r *Repo) GetRecentDestinationChanges(ctx context.Context, hours int, limit int) ([]*DestinationChange, error) {
+	query := `SELECT vh.id, vh.mmsi, v.name, vh.old_value, vh.new_value, vh.changed_at
+		FROM vessel_history vh
+		JOIN vessels v ON v.mmsi = vh.mmsi
+		WHERE vh.field_name = 'destination'
+		  AND vh.changed_at > NOW() - make_interval(hours => $1)
+		ORDER BY vh.changed_at DESC
+		LIMIT $2`
+
+	rows, err := r.pool.Query(ctx, query, hours, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*DestinationChange
+	for rows.Next() {
+		var c DestinationChange
+		if err := rows.Scan(&c.ID, &c.MMSI, &c.Name, &c.OldValue, &c.NewValue, &c.ChangedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, &c)
+	}
+	return out, rows.Err()
+}
