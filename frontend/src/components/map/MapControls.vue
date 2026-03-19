@@ -38,7 +38,8 @@ const collapsed = defineModel<boolean>('collapsed', { default: false })
       <label><input type="checkbox" v-model="filters.movingOnly"> Moving only (SOG &gt; 0.5)</label>
 
       <div class="section-label">Layers</div>
-      <label><input type="checkbox" v-model="filters.showTrails"> Auto-trails (zoom 10+)</label>
+      <label><input type="checkbox" v-model="filters.showTrails"> Auto-trails (zoom 7+)</label>
+      <label><input type="checkbox" v-model="filters.showGapMarkers"> AIS on/off markers</label>
       <label><input type="checkbox" v-model="filters.showSTS"> STS event markers</label>
       <label><input type="checkbox" v-model="filters.satellite"> Satellite imagery</label>
 
@@ -56,16 +57,18 @@ const collapsed = defineModel<boolean>('collapsed', { default: false })
 .controls-panel {
   position: absolute;
   z-index: 1000;
-  top: 10px;
-  right: 10px;
+  top: 12px;
+  right: 12px;
   min-width: 200px;
   max-height: calc(100vh - 80px);
-  background: rgba(20, 24, 33, 0.92);
+  background: rgba(14, 17, 28, 0.94);
   color: #e0e0e0;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 13px;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.2s;
 }
 .panel-head {
   padding: 10px 14px;
@@ -78,34 +81,37 @@ const collapsed = defineModel<boolean>('collapsed', { default: false })
   align-items: center;
   user-select: none;
 }
-.panel-head:hover { background: rgba(255, 255, 255, 0.04); }
-.min-btn { font-size: 16px; color: #888; }
+.panel-head:hover { background: rgba(255, 255, 255, 0.03); border-radius: 10px; }
+.min-btn { font-size: 16px; color: #555; transition: color 0.15s; }
+.panel-head:hover .min-btn { color: #aaa; }
 .panel-body { padding: 8px 14px 12px; max-height: calc(100vh - 130px); overflow-y: auto; }
 .section-label {
-  font-size: 10px;
-  color: #888;
+  font-size: 9px;
+  color: #555;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   margin-top: 8px;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 .section-label:first-child { margin-top: 0; border-top: none; padding-top: 0; }
 label {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   cursor: pointer;
-  padding: 2px 0;
+  padding: 3px 0;
   font-size: 12px;
+  color: #bbb;
+  transition: color 0.1s;
 }
-input[type='checkbox'] { accent-color: #7cb4ff; }
+label:hover { color: #fff; }
+input[type='checkbox'] { accent-color: #4fc3f7; width: 13px; height: 13px; }
 .legend-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
   flex-shrink: 0;
 }
 .range-row {
@@ -115,21 +121,22 @@ input[type='checkbox'] { accent-color: #7cb4ff; }
   margin: 4px 0;
 }
 .range-row input[type='number'] {
-  width: 60px;
+  width: 55px;
   padding: 3px 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   color: #fff;
   font-size: 12px;
   outline: none;
 }
-.range-row span { font-size: 11px; color: #999; }
+.range-row input:focus { border-color: #4fc3f7; }
+.range-row span { font-size: 11px; color: #666; }
 .legend-footer {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 10px;
-  color: #555;
+  color: #444;
 }
 </style>

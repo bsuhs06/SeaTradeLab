@@ -340,3 +340,40 @@ export interface FavoritesResponse {
   favorites: VesselFavorite[]
   count: number
 }
+
+// ========== Destination Anomalies ==========
+
+export interface DestinationAnomaly {
+  mmsi: number
+  name?: string
+  vessel_type_name?: string
+  destination: string
+  reason: 'message_keywords' | 'long_multi_word' | 'multi_word_message' | 'frequent_changes' | 'unusual_format'
+  last_seen_at: string
+  change_count: number
+  latitude: number
+  longitude: number
+}
+
+export interface DestinationChange {
+  id: number
+  mmsi: number
+  name?: string
+  old_value?: string
+  new_value?: string
+  changed_at: string
+}
+
+export interface DestinationAnomaliesResponse {
+  anomalies: DestinationAnomaly[]
+  changes: DestinationChange[]
+  anomaly_count: number
+  change_count: number
+  hours: number
+}
+
+export interface DestinationChangesResponse {
+  changes: DestinationChange[]
+  count: number
+  mmsi: number
+}

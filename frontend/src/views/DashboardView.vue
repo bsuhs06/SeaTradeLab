@@ -13,6 +13,7 @@ import PortManager from '@/components/dashboard/PortManager.vue'
 import VesselRegistry from '@/components/dashboard/VesselRegistry.vue'
 import TaintTracker from '@/components/dashboard/TaintTracker.vue'
 import FavoritesPanel from '@/components/dashboard/FavoritesPanel.vue'
+import DestinationAnomalies from '@/components/dashboard/DestinationAnomalies.vue'
 import FaqSection from '@/components/dashboard/FaqSection.vue'
 
 const stats = ref<Stats | null>(null)
@@ -25,6 +26,7 @@ const collapsed = reactive<Record<string, boolean>>({
   favorites: false,
   registry: false,
   taint: false,
+  destinations: false,
   ports: false,
   sts: false,
   dark: false,
@@ -83,6 +85,7 @@ onMounted(refreshAll)
         <a href="#favorites" class="sec">Favorites</a>
         <a href="#registry" class="sec">Vessel Registry</a>
         <a href="#taint" class="sec">Taint Tracker</a>
+        <a href="#destinations" class="sec">Destination Anomalies</a>
         <a href="#events" class="sec">STS Events</a>
         <a href="#port-visitors" class="sec">Port Visitors</a>
         <a href="#analytics" class="sec">Run Analytics</a>
@@ -147,6 +150,16 @@ onMounted(refreshAll)
         </div>
         <div v-show="!collapsed.ports" class="section-body">
           <PortVisitsTable :visits="portVisits" @mode-change="loadPortVisits" />
+        </div>
+      </div>
+
+      <div id="destinations" class="section">
+        <div class="section-bar" @click="toggle('destinations')">
+          <span class="section-title">Destination Anomalies</span>
+          <span class="chevron" :class="{ open: !collapsed.destinations }">&#9650;</span>
+        </div>
+        <div v-show="!collapsed.destinations" class="section-body">
+          <DestinationAnomalies />
         </div>
       </div>
 

@@ -19,6 +19,7 @@ export interface MapFilters {
   darkMinHours: number
   movingOnly: boolean
   showTrails: boolean
+  showGapMarkers: boolean
   showSTS: boolean
   satellite: boolean
 }
@@ -29,6 +30,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   const visibleCount = ref(0)
   const isLive = ref(true)
   const focusedMMSIs = ref<Set<number>>(new Set())
+  const selectedVessel = ref<VesselProperties | null>(null)
 
   let markersLayer: L.MarkerClusterGroup
   let markersByMmsi = new Map<number, L.Marker | L.CircleMarker>()
@@ -38,6 +40,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   let focusLayer: L.LayerGroup | null = null
   let satelliteTiles: L.TileLayer
   let osmTiles: L.TileLayer
+  let darkTiles: L.TileLayer
   let refreshInterval: ReturnType<typeof setInterval> | null = null
   let trailTimer: ReturnType<typeof setTimeout> | null = null
   let fetchTimer: ReturnType<typeof setTimeout> | null = null
@@ -65,6 +68,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     darkMinHours: 6,
     movingOnly: false,
     showTrails: true,
+    showGapMarkers: true,
     showSTS: false,
     satellite: false,
   })
@@ -100,11 +104,16 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       attribution: 'OSM',
       maxZoom: 19,
     })
+    darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: 'CartoDB',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    })
 
     if (filters.value.satellite) {
       satelliteTiles.addTo(m)
     } else {
-      osmTiles.addTo(m)
+      darkTiles.addTo(m)
     }
 
     // Gap markers render below vessel markers
@@ -121,18 +130,17 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       chunkDelay: 50,
       iconCreateFunction(cluster: L.MarkerCluster) {
         const count = cluster.getChildCount()
-        let size: string
         let px: number
         let ring: string
-        if (count < 20) { size = 'small'; px = 36; ring = '#3b82f6' }
-        else if (count < 100) { size = 'medium'; px = 44; ring = '#f59e0b' }
-        else { size = 'large'; px = 52; ring = '#ef4444' }
+        if (count < 20) { px = 34; ring = '#4fc3f7' }
+        else if (count < 100) { px = 42; ring = '#ffa726' }
+        else { px = 50; ring = '#ef5350' }
         const r = px / 2
-        const ir = r - 4
+        const ir = r - 3
         const svg = `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}">` +
-          `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${ring}" opacity="0.25"/>` +
-          `<circle cx="${r}" cy="${r}" r="${ir}" fill="#1a1a2e" stroke="${ring}" stroke-width="3"/>` +
-          `<text x="${r}" y="${r}" dy="0.35em" text-anchor="middle" fill="#fff" font-size="${size === 'large' ? 14 : size === 'medium' ? 13 : 12}" font-weight="700">${count}</text>` +
+          `<circle cx="${r}" cy="${r}" r="${r - 1}" fill="${ring}" opacity="0.15"/>` +
+          `<circle cx="${r}" cy="${r}" r="${ir}" fill="rgba(14,17,28,0.85)" stroke="${ring}" stroke-width="2"/>` +
+          `<text x="${r}" y="${r}" dy="0.35em" text-anchor="middle" fill="#e0e0e0" font-size="${count >= 100 ? 13 : 12}" font-weight="600">${count}</text>` +
           `</svg>`
         return L.divIcon({
           html: svg,
@@ -171,11 +179,13 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   function toggleSatellite(on: boolean) {
     if (!map.value) return
     if (on) {
+      map.value.removeLayer(darkTiles)
       map.value.removeLayer(osmTiles)
       satelliteTiles.addTo(map.value)
     } else {
       map.value.removeLayer(satelliteTiles)
-      osmTiles.addTo(map.value)
+      map.value.removeLayer(osmTiles)
+      darkTiles.addTo(map.value)
     }
   }
 
@@ -237,7 +247,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     const cached = iconCache.get(cacheKey)
     if (cached) return cached
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="${color}" stroke="rgba(255,255,255,0.7)" stroke-width="1.2"/></svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><path d="M12 1 L16 8 L17 18 L15 22 L12 20 L9 22 L7 18 L8 8 Z" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="0.8"/></svg>`
     let style = `transform:rotate(${rotBucket}deg);width:${size}px;height:${size}px;`
     if (p.is_russian) style += 'filter:drop-shadow(0 0 3px rgba(255,0,0,0.6));'
 
@@ -439,11 +449,13 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
         fillOpacity: 0.8,
         opacity: 0.9,
       })
-      cm.bindPopup(() => buildPopup(p), { maxWidth: 300 })
+      cm.bindTooltip(p.name || 'MMSI ' + p.mmsi, { direction: 'top', offset: [0, -6], className: 'vessel-tooltip' })
+      cm.on('click', () => { selectedVessel.value = p })
       return cm
     } else {
       const marker = L.marker([lat, lng], { icon: makeArrowIcon(p, zoom) })
-      marker.bindPopup(() => buildPopup(p), { maxWidth: 300 })
+      marker.bindTooltip(p.name || 'MMSI ' + p.mmsi, { direction: 'top', offset: [0, -10], className: 'vessel-tooltip' })
+      marker.on('click', () => { selectedVessel.value = p })
       return marker
     }
   }
@@ -510,25 +522,27 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
           }
         }
         // Draw gap connectors and AIS-off markers
-        const vInfo = vesselInfoMap.get(mmsiStr)
-        const vName = vInfo?.name || 'MMSI ' + mmsiStr
-        const vType = vInfo?.vessel_type || ''
-        for (const gap of gaps) {
-          L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.6, dashArray: '6,10', interactive: false }).addTo(trailsLayer!)
-          const offIcon = L.divIcon({
-            html: `<div class="ais-gap-marker ais-off">X</div>`,
-            className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
-          })
-          const onIcon = L.divIcon({
-            html: `<div class="ais-gap-marker ais-on">&#9650;</div>`,
-            className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
-          })
-          const offTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS OFF — ~${gap.hours}h gap`
-          const onTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS ON`
-          L.marker(gap.from, { icon: offIcon, interactive: true, pane: 'gapPane' })
-            .addTo(trailsLayer!).bindTooltip(offTip, { direction: 'top', offset: [0, -12] })
-          L.marker(gap.to, { icon: onIcon, interactive: true, pane: 'gapPane' })
-            .addTo(trailsLayer!).bindTooltip(onTip, { direction: 'top', offset: [0, -12] })
+        if (filters.value.showGapMarkers) {
+          const vInfo = vesselInfoMap.get(mmsiStr)
+          const vName = vInfo?.name || 'MMSI ' + mmsiStr
+          const vType = vInfo?.vessel_type || ''
+          for (const gap of gaps) {
+            L.polyline([gap.from, gap.to], { color: '#ff8800', weight: 3, opacity: 0.6, dashArray: '6,10', interactive: false }).addTo(trailsLayer!)
+            const offIcon = L.divIcon({
+              html: `<div class="ais-gap-marker ais-off">X</div>`,
+              className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
+            })
+            const onIcon = L.divIcon({
+              html: `<div class="ais-gap-marker ais-on">&#9650;</div>`,
+              className: '', iconSize: [14, 14], iconAnchor: [-4, 7]
+            })
+            const offTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS OFF — ~${gap.hours}h gap`
+            const onTip = `<b>${vName}</b>${vType ? '<br>' + vType : ''}<br>AIS ON`
+            L.marker(gap.from, { icon: offIcon, interactive: true, pane: 'gapPane' })
+              .addTo(trailsLayer!).bindTooltip(offTip, { direction: 'top', offset: [0, -12] })
+            L.marker(gap.to, { icon: onIcon, interactive: true, pane: 'gapPane' })
+              .addTo(trailsLayer!).bindTooltip(onTip, { direction: 'top', offset: [0, -12] })
+          }
         }
       }
     } catch (e) {
@@ -787,6 +801,10 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     map.value?.remove()
   })
 
+  function closePanel() {
+    selectedVessel.value = null
+  }
+
   return {
     map,
     vesselData,
@@ -794,6 +812,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     isLive,
     filters,
     focusedMMSIs,
+    selectedVessel,
     renderMarkers,
     fetchVessels,
     loadHistorical,
@@ -804,5 +823,6 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     flyTo,
     setFocusMode,
     clearFocusMode,
+    closePanel,
   }
 }
