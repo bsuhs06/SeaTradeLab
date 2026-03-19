@@ -67,8 +67,8 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     darkOnly: false,
     darkMinHours: 6,
     movingOnly: false,
-    showTrails: true,
-    showGapMarkers: true,
+    showTrails: false,
+    showGapMarkers: false,
     showSTS: false,
     satellite: false,
   })
@@ -76,9 +76,9 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
   function getMapBBox() {
     if (!map.value) return undefined
     const b = map.value.getBounds()
-    // Pad bounds by 20% to prefetch nearby vessels
-    const latPad = (b.getNorth() - b.getSouth()) * 0.2
-    const lngPad = (b.getEast() - b.getWest()) * 0.2
+    // Pad bounds by 10% to prefetch nearby vessels without over-fetching
+    const latPad = (b.getNorth() - b.getSouth()) * 0.1
+    const lngPad = (b.getEast() - b.getWest()) * 0.1
     return {
       south: b.getSouth() - latPad,
       west: b.getWest() - lngPad,
@@ -168,12 +168,12 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
     lastZoom = m.getZoom()
   }
 
-  // Debounce viewport-triggered fetches (300ms)
+  // Debounce viewport-triggered fetches (500ms)
   function debouncedFetchVessels() {
     if (fetchTimer) clearTimeout(fetchTimer)
     fetchTimer = setTimeout(() => {
       if (isLive.value) fetchVessels()
-    }, 300)
+    }, 500)
   }
 
   function toggleSatellite(on: boolean) {
@@ -471,7 +471,7 @@ export function useMap(containerRef: Ref<HTMLElement | null>) {
       return
     }
     if (trailTimer) clearTimeout(trailTimer)
-    trailTimer = setTimeout(doFetchTrails, 600)
+    trailTimer = setTimeout(doFetchTrails, 1000)
   }
 
   async function doFetchTrails() {
